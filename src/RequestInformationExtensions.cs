@@ -5,7 +5,6 @@ namespace Gainsway.Kiota.Testing;
 
 internal static class RequestInformationExtensions
 {
-
     private class ReplaceParameterVisitor : ExpressionVisitor
     {
         private readonly ParameterExpression _oldParam;
@@ -39,5 +38,4 @@ internal static class RequestInformationExtensions
         var body = Expression.AndAlso(left!, right!);
         return Expression.Lambda<Predicate<RequestInformation>>(body, parameter);
     }
-
 }

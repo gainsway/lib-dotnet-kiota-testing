@@ -74,11 +74,11 @@ public static class KiotaClientMockExtensions
     public static void MockClientResponse<T, R>(
         this T mockedClient,
         string urlTemplate,
-        R returnObject,
+        R? returnObject,
         Expression<Predicate<RequestInformation>>? requestInfoPredicate = null
     )
         where T : BaseRequestBuilder
-        where R : IParsable?
+        where R : IParsable
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
@@ -90,8 +90,6 @@ public static class KiotaClientMockExtensions
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
                 : requestInformationUrlTemplatePredicate;
 
-#pragma warning disable CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
-
         requestAdapter
             ?.SendAsync(
                 Arg.Is(requestInformationPredicate),
@@ -100,7 +98,41 @@ public static class KiotaClientMockExtensions
                 Arg.Any<CancellationToken>()
             )
             .Returns(returnObject);
-#pragma warning restore CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
+    }
+
+    /// <summary>
+    /// Mocks a no-content response for a Kiota client request.
+    /// </summary>
+    /// <typeparam name="T">The type of the Kiota client request builder.</typeparam>
+    /// <param name="mockedClient">The mocked client request builder instance.</param>
+    /// <param name="urlTemplate">The URL template to match the request.</param>
+    /// <param name="requestInfoPredicate">
+    /// An optional predicate to further filter the request information.
+    /// </param>
+    public static void MockClientNoContentResponse<T>(
+        this T mockedClient,
+        string urlTemplate,
+        Expression<Predicate<RequestInformation>>? requestInfoPredicate = null
+    )
+        where T : BaseRequestBuilder
+    {
+        var requestAdapter = GetRequestAdapter(mockedClient);
+
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+            urlTemplate
+        );
+        var requestInformationPredicate =
+            requestInfoPredicate != null
+                ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
+                : requestInformationUrlTemplatePredicate;
+
+        requestAdapter
+            ?.SendNoContentAsync(
+                Arg.Is(requestInformationPredicate),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.CompletedTask);
     }
 
     /// <summary>
@@ -117,11 +149,11 @@ public static class KiotaClientMockExtensions
     public static void MockClientCollectionResponse<T, R>(
         this T mockedClient,
         string urlTemplate,
-        IEnumerable<R> returnObject,
+        IEnumerable<R>? returnObject,
         Expression<Predicate<RequestInformation>>? requestInfoPredicate = null
     )
         where T : BaseRequestBuilder
-        where R : IParsable?
+        where R : IParsable
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
@@ -133,8 +165,6 @@ public static class KiotaClientMockExtensions
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
                 : requestInformationUrlTemplatePredicate;
 
-#pragma warning disable CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
-
         requestAdapter
             ?.SendCollectionAsync(
                 Arg.Is(requestInformationPredicate),
@@ -143,6 +173,5 @@ public static class KiotaClientMockExtensions
                 Arg.Any<CancellationToken>()
             )
             .Returns(returnObject);
-#pragma warning restore CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
     }
 }

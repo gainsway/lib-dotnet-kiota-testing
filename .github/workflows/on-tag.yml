@@ -3,7 +3,7 @@ name: Release stable version
 on:
   push:
     tags:
-      - "v*"
+        - 'v*'
 jobs:
   ci:
     name: Continuous Integration
@@ -13,9 +13,18 @@ jobs:
     secrets: inherit
 
   publish:
-    name: Publish
+    name: Publish GitHub Package
     needs: ci
     uses: gainsway/github-workflows-public/.github/workflows/nuget.publish.yml@main
     with:
-      dotnet-version: 9.0.x
+        dotnet-version: 9.0.x
     secrets: inherit
+
+  publish-nuget-org:
+    name: Publish NuGet.org
+    needs: ci
+    uses: gainsway/github-workflows-public/.github/workflows/nuget.publish.nuget.org.yml@main
+    with:
+        dotnet-version: 9.0.x
+    secrets: inherit
+    

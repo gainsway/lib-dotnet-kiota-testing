@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: "lib-dotnet-kiota-testing"
+  description: "This library adds helpers and extensions to simplify Kiota generated Clients mocking "
+  annotations:
+    github.com/project-slug: gainsway/lib-dotnet-kiota-testing
+    backstage.io/techdocs-ref: dir:.
+  tags: 
+    - dotnet
+spec:
+  type: library
+  lifecycle: experimental
+  owner: "group:default/engineering"

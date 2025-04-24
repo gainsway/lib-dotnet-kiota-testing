@@ -1,0 +1,8 @@
+site_name: "lib-dotnet-kiota-testing"
+site_description: "This library adds helpers and extensions to simplify Kiota generated Clients mocking "
+
+nav:
+  - Introduction: index.md
+
+plugins:
+  - techdocs-core

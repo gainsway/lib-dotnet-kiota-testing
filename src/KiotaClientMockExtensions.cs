@@ -1,5 +1,6 @@
 ﻿using System.Linq.Expressions;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Serialization;
 using NSubstitute;
@@ -19,7 +20,7 @@ public static class KiotaClientMockExtensions
     /// <returns>An expression that evaluates to true if the URL template matches.</returns>
     private static Expression<Predicate<RequestInformation>> RequestInformationUrlTemplatePredicate(
         string urlTemplate
-    ) => req => req.UrlTemplate!.EndsWith(urlTemplate);
+    ) => req => Regex.Replace(req.UrlTemplate!, @"\{\?.*?\}", string.Empty).EndsWith(urlTemplate);
 
     /// <summary>
     /// Creates a mock of the client class.

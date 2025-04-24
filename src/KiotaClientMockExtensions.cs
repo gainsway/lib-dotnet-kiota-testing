@@ -27,14 +27,17 @@ public static class KiotaClientMockExtensions
     /// This is a generic method that can be used to create a mock of any Kiota generated client class.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    /// <returns></returns>
     public static T GetClientMock<T>()
-        where T : class
+        where T : BaseRequestBuilder
     {
-        IRequestAdapter _clientAdapter;
-        _clientAdapter = Substitute.For<IRequestAdapter>();
+        IRequestAdapter _requestAdapterMock;
+        _requestAdapterMock = Substitute.For<IRequestAdapter>();
 
-        return (T)Activator.CreateInstance(typeof(T), _clientAdapter);
+        var instance = Activator.CreateInstance(typeof(T), _requestAdapterMock);
+        return instance as T
+            ?? throw new InvalidOperationException(
+                $"Unable to create an instance of {typeof(T).Name}."
+            );
     }
 
     /// <summary>

@@ -78,7 +78,7 @@ public static class KiotaClientMockExtensions
         Expression<Predicate<RequestInformation>>? requestInfoPredicate = null
     )
         where T : BaseRequestBuilder
-        where R : IParsable
+        where R : IParsable?
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
@@ -90,6 +90,8 @@ public static class KiotaClientMockExtensions
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
                 : requestInformationUrlTemplatePredicate;
 
+#pragma warning disable CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
+
         requestAdapter
             ?.SendAsync(
                 Arg.Is(requestInformationPredicate),
@@ -98,6 +100,7 @@ public static class KiotaClientMockExtensions
                 Arg.Any<CancellationToken>()
             )
             .Returns(returnObject);
+#pragma warning restore CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
     }
 
     /// <summary>
@@ -118,7 +121,7 @@ public static class KiotaClientMockExtensions
         Expression<Predicate<RequestInformation>>? requestInfoPredicate = null
     )
         where T : BaseRequestBuilder
-        where R : IParsable
+        where R : IParsable?
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
@@ -130,6 +133,8 @@ public static class KiotaClientMockExtensions
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
                 : requestInformationUrlTemplatePredicate;
 
+#pragma warning disable CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
+
         requestAdapter
             ?.SendCollectionAsync(
                 Arg.Is(requestInformationPredicate),
@@ -138,5 +143,6 @@ public static class KiotaClientMockExtensions
                 Arg.Any<CancellationToken>()
             )
             .Returns(returnObject);
+#pragma warning restore CS8631 // The type cannot be used as type parameter in the generic type or method. Nullability of type argument doesn't match constraint type.
     }
 }

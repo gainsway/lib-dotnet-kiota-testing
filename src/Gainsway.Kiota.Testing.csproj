@@ -1,12 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <RootNamespace>Gainsway.Gainsway.Kiota.Testing</RootNamespace>
-    <PackageId>Gainsway.Gainsway.Kiota.Testing</PackageId>
+    <RootNamespace>Gainsway.Kiota.Testing</RootNamespace>
+    <PackageId>Gainsway.Kiota.Testing</PackageId>
     <Version>0.0.0</Version>
     <Authors>Engineering</Authors>
     <Company>Gainsway</Company>
-    <PackageDescription>This library adds helpers and extensions to simplify Kiota generated Clients mocking </PackageDescription>
+    <PackageDescription>This library adds helpers and extensions to simplify Kiota generated Clients
+      mocking </PackageDescription>
     <RepositoryUrl>https://github.com/gainsway/lib-dotnet-kiota-testing</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -25,5 +26,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="1.17.2" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
   </ItemGroup>
 </Project>

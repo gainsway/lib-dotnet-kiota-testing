@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <RootNamespace>Gainsway.Gainsway.Kiota.Testing.Tests</RootNamespace>
+    <RootNamespace>Gainsway.Kiota.Testing.Tests</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 

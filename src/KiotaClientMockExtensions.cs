@@ -23,11 +23,10 @@ public static class KiotaClientMockExtensions
     ) => req => Regex.Replace(req.UrlTemplate!, @"\{\?.*?\}", string.Empty).EndsWith(urlTemplate);
 
     /// <summary>
-    /// Creates a mock of the client class.
-    /// This is a generic method that can be used to create a mock of any Kiota generated client class.
+    /// Creates a Kiota generated client class that can be mocked.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public static T GetClientMock<T>()
+    public static T GetMockableClient<T>()
         where T : BaseRequestBuilder
     {
         IRequestAdapter _requestAdapterMock;

@@ -11,10 +11,10 @@ dotnet add package Gainsway.Kiota.Testing
 ```
 
 1. Create a Mocked Client
-Use `GetClientMock<T>()` to create an instance of a Kiota-generated client with a mocked `IRequestAdapter`:
+Use `GetMockableClient<T>()` to create an instance of a Kiota-generated client with a mocked `IRequestAdapter`:
 
 ```csharp
-var mockedClient = KiotaClientMockExtensions.GetClientMock<MyKiotaClient>();
+var mockedClient = KiotaClientMockExtensions.GetMockableClient<MyKiotaClient>();
 ```
 
 2. Mock a Single Object Response

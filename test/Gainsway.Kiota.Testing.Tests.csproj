@@ -1,17 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>Gainsway.Kiota.Testing.Tests</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="CSharpier.MSBuild" Version="0.30.6">
+    <PackageReference Include="CSharpier.MSBuild" Version="1.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
@@ -21,20 +18,16 @@
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Include="NUnit" Version="4.3.2" />
-    <PackageReference Include="NUnit.Analyzers" Version="4.6.0">
+    <PackageReference Include="NUnit.Analyzers" Version="4.7.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
   </ItemGroup>
-
-
   <ItemGroup>
     <Using Include="NUnit.Framework" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\src\Gainsway.Kiota.Testing.csproj" />
   </ItemGroup>
-
 </Project>

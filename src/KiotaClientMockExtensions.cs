@@ -70,7 +70,6 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
-
     public static void MockClientResponse<T, R>(
         this T mockedClient,
         string urlTemplate,

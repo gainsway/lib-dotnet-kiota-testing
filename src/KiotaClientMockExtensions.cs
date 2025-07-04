@@ -173,4 +173,41 @@ public static class KiotaClientMockExtensions
             )
             .Returns(returnObject);
     }
+
+    /// <summary>
+    /// Mocks a string response for a Kiota client request.
+    /// </summary>
+    /// <typeparam name="T">The type of the Kiota client request builder.</typeparam>
+    /// <param name="mockedClient">The mocked client request builder instance.</param>
+    /// <param name="urlTemplate">The URL template to match the request.</param>
+    /// <param name="returnValue">The string to return as the response.</param>
+    /// <param name="requestInfoPredicate">
+    /// An optional predicate to further filter the request information.
+    /// </param>
+    public static void MockClientResponse<T>(
+        this T mockedClient,
+        string urlTemplate,
+        string? returnValue,
+        Expression<Predicate<RequestInformation>>? requestInfoPredicate = null
+    )
+        where T : BaseRequestBuilder
+    {
+        var requestAdapter = GetRequestAdapter(mockedClient);
+
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+            urlTemplate
+        );
+        var requestInformationPredicate =
+            requestInfoPredicate != null
+                ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
+                : requestInformationUrlTemplatePredicate;
+
+        requestAdapter
+            ?.SendPrimitiveAsync<string>(
+                Arg.Is(requestInformationPredicate),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(returnValue);
+    }
 }

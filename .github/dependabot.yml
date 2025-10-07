@@ -30,7 +30,9 @@ updates:
     registries:
       - nuget
       - gainsway
-    directory: "/"
+    directories:
+      - "/"
+      - "/src/.config"
     schedule:
       interval: "weekly"
     labels:

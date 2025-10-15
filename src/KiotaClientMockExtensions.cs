@@ -13,6 +13,39 @@ namespace Gainsway.Kiota.Testing;
 public static class KiotaClientMockExtensions
 {
     /// <summary>
+    /// Helper method that performs URL template matching with debug logging.
+    /// </summary>
+    private static bool MatchesUrlTemplate(
+        RequestInformation req,
+        string normalizedPattern,
+        string originalPattern
+    )
+    {
+        // DEBUG: Log what we're actually receiving
+        Console.WriteLine($"[DEBUG] Matching attempt:");
+        Console.WriteLine($"  Pattern: '{originalPattern}' → Normalized: '{normalizedPattern}'");
+        Console.WriteLine($"  Request.UrlTemplate: '{req.UrlTemplate ?? "NULL"}'");
+        Console.WriteLine($"  Request.URI: '{(req.URI != null ? req.URI.ToString() : "NULL")}'");
+
+        if (string.IsNullOrEmpty(req.UrlTemplate))
+        {
+            Console.WriteLine($"  ❌ UrlTemplate is null/empty - NO MATCH");
+            return false;
+        }
+
+        var normalizedRequest = NormalizeUrlTemplate(req.UrlTemplate);
+        Console.WriteLine($"  Normalized request: '{normalizedRequest}'");
+
+        var matches = normalizedRequest.Equals(
+            normalizedPattern,
+            StringComparison.OrdinalIgnoreCase
+        );
+        Console.WriteLine($"  Result: {(matches ? "✅ MATCH" : "❌ NO MATCH")}");
+
+        return matches;
+    }
+
+    /// <summary>
     /// Creates a predicate expression to match a <see cref="RequestInformation"/> object
     /// based on its URL template matching the specified pattern.
     /// </summary>
@@ -40,10 +73,7 @@ public static class KiotaClientMockExtensions
         // Normalize the pattern: ensure it starts with / for consistent matching
         var normalizedPattern = urlTemplate.StartsWith("/") ? urlTemplate : "/" + urlTemplate;
 
-        return req =>
-            !string.IsNullOrEmpty(req.UrlTemplate)
-            && NormalizeUrlTemplate(req.UrlTemplate)
-                .Equals(normalizedPattern, StringComparison.OrdinalIgnoreCase);
+        return req => MatchesUrlTemplate(req, normalizedPattern, urlTemplate);
     }
 
     /// <summary>

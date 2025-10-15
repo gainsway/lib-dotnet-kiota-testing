@@ -1,9 +1,6 @@
 # Gainsway.Kiota.Testing
-  - [Mocking 404 Not Found](#mocking-404-not-found)
-  - [Mocking Empty Collections](#mocking-empty-collections)
-  - [Mocking with Query String Parameters](#mocking-with-query-string-parameters)
-  - [URL Pattern Matching](#url-pattern-matching) testing library that simplifies mocking [Kiota-generated](https://learn.microsoft.com/en-us/openapi/kiota/overview) API clients for unit tests using NSubstitute.
 
+A testing library that simplifies mocking [Kiota-generated](https://learn.microsoft.com/en-us/openapi/kiota/overview) API clients for unit tests using NSubstitute.
 [![NuGet](https://img.shields.io/nuget/v/Gainsway.Kiota.Testing.svg)](https://www.nuget.org/packages/Gainsway.Kiota.Testing/)
 
 ## 📋 Table of Contents

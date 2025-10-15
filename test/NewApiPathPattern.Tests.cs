@@ -175,8 +175,10 @@ public class NewApiPathPatternTests
 
         _mockClient.MockClientResponse(
             "/api/funds/{fundId}/activities/{activityId}",
-            123,
-            req => req.PathParameters["activityId"].ToString() == activityId.ToString()
+            activity,
+            req =>
+                req.PathParameters["fundId"].ToString() == fundId.ToString()
+                && req.PathParameters["activityId"].ToString() == activityId.ToString()
         );
 
         // Assert - Smoke test: All four mock setups completed without exceptions

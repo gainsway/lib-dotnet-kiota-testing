@@ -13,7 +13,7 @@ namespace Gainsway.Kiota.Testing;
 public static class KiotaClientMockExtensions
 {
     /// <summary>
-    /// Helper method that performs URL template matching with debug logging.
+    /// Helper method that performs URL template matching.
     /// </summary>
     private static bool MatchesUrlTemplate(
         RequestInformation req,
@@ -21,50 +21,47 @@ public static class KiotaClientMockExtensions
         string originalPattern
     )
     {
-        // DEBUG: Log what we're actually receiving
-        Console.WriteLine($"[DEBUG] Matching attempt:");
-        Console.WriteLine($"  Pattern: '{originalPattern}' → Normalized: '{normalizedPattern}'");
-        Console.WriteLine($"  Request.UrlTemplate: '{req.UrlTemplate ?? "NULL"}'");
-        Console.WriteLine($"  Request.URI: '{(req.URI != null ? req.URI.ToString() : "NULL")}'");
-
         if (string.IsNullOrEmpty(req.UrlTemplate))
         {
-            Console.WriteLine($"  ❌ UrlTemplate is null/empty - NO MATCH");
             return false;
         }
 
         var normalizedRequest = NormalizeUrlTemplate(req.UrlTemplate);
-        Console.WriteLine($"  Normalized request: '{normalizedRequest}'");
-
-        var matches = normalizedRequest.Equals(
-            normalizedPattern,
-            StringComparison.OrdinalIgnoreCase
-        );
-        Console.WriteLine($"  Result: {(matches ? "✅ MATCH" : "❌ NO MATCH")}");
-
-        return matches;
+        return normalizedRequest.Equals(normalizedPattern, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
     /// Creates a predicate expression to match a <see cref="RequestInformation"/> object
     /// based on its URL template matching the specified pattern.
     /// </summary>
-    /// <param name="urlTemplate">The URL template to match (e.g., "/api/funds/{id}").</param>
+    /// <param name="urlTemplate">The URL template to match (e.g., "/api/funds/{*}").</param>
     /// <returns>An expression that evaluates to true if the URL template matches.</returns>
     /// <remarks>
     /// This method handles Kiota's URL template format which includes:
     /// - {+baseurl} prefix (stripped for matching)
     /// - Query parameter templates like {?param1,param2} (stripped for matching)
+    /// - URL-encoded parameter names like {fund%2Did} which is {fund-id}
     ///
     /// Matching strategy:
     /// 1. Strip {+baseurl} prefix from the request's URL template
     /// 2. Strip query parameter templates {?...}
-    /// 3. Compare the cleaned path with the provided pattern
+    /// 3. Normalize all path parameters to {*} wildcard for flexible matching
+    /// 4. Compare the cleaned path with the provided pattern
+    ///
+    /// Path Parameter Matching:
+    /// Kiota may generate different parameter names than what appears in your OpenAPI spec.
+    /// For example, {id} might become {fund-id} or {fund%2Did} (URL-encoded).
+    /// To handle this, all path parameters are normalized to {*} wildcards.
     ///
     /// Examples of valid matches:
-    /// - Pattern "/api/funds/{id}" matches "{+baseurl}/api/funds/{id}"
-    /// - Pattern "/api/funds/{id}" matches "{+baseurl}/api/funds/{id}{?expand}"
-    /// - Pattern "api/funds/{id}" matches "{+baseurl}/api/funds/{id}" (leading slash optional)
+    /// - Pattern "/api/funds/{*}" matches "{+baseurl}/api/funds/{id}"
+    /// - Pattern "/api/funds/{*}" matches "{+baseurl}/api/funds/{fund-id}"
+    /// - Pattern "/api/funds/{*}" matches "{+baseurl}/api/funds/{fund%2Did}"
+    /// - Pattern "/api/funds/{*}/activities/{*}" matches "{+baseurl}/api/funds/{id}/activities/{activityId}"
+    /// - Pattern "api/funds/{*}" works too (leading slash optional)
+    ///
+    /// Note: If you need to differentiate between similar endpoints (e.g., /api/funds/{id} vs /api/funds/{id}/metadata),
+    /// use the full path with wildcards and optionally add a requestInfoPredicate to check other properties like HttpMethod.
     /// </remarks>
     private static Expression<Predicate<RequestInformation>> RequestInformationUrlTemplatePredicate(
         string urlTemplate
@@ -78,6 +75,7 @@ public static class KiotaClientMockExtensions
 
     /// <summary>
     /// Normalizes a Kiota URL template by removing the {+baseurl} prefix and query parameter templates.
+    /// Also handles URL-encoded parameter names like {fund%2Did} by converting them to simple placeholders.
     /// </summary>
     /// <param name="urlTemplate">The URL template to normalize.</param>
     /// <returns>The normalized URL path.</returns>
@@ -91,13 +89,66 @@ public static class KiotaClientMockExtensions
         // Step 2: Remove query parameter templates like {?param1,param2}
         cleanedUrl = Regex.Replace(cleanedUrl, @"\{\?.*?\}", string.Empty);
 
-        // Step 3: Ensure leading slash for consistent matching
+        // Step 3: Normalize URL-encoded parameter names
+        // Kiota generates things like {fund%2Did} which is {fund-id} URL-encoded
+        // We need to decode these so they match user patterns like {id}
+        // Strategy: Replace any {paramName} with a normalized placeholder {*}
+        cleanedUrl = Regex.Replace(cleanedUrl, @"\{[^}]+\}", "{*}");
+
+        // Step 4: Ensure leading slash for consistent matching
         if (!cleanedUrl.StartsWith("/"))
         {
             cleanedUrl = "/" + cleanedUrl;
         }
 
         return cleanedUrl;
+    }
+
+    /// <summary>
+    /// Extracts and normalizes the URL template from a Kiota-generated request builder.
+    /// This allows you to use the exact template from generated code instead of hardcoding paths.
+    /// </summary>
+    /// <typeparam name="T">The type of the request builder.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder instance.</param>
+    /// <returns>The normalized URL template suitable for mocking.</returns>
+    /// <example>
+    /// <code>
+    /// // Instead of hardcoding:
+    /// mockedClient.MockClientResponse("/api/funds/{*}", fund);
+    ///
+    /// // Use Kiota's generated template:
+    /// var urlTemplate = KiotaClientMockExtensions.GetUrlTemplate(mockClient.Api.Funds[fundId]);
+    /// mockedClient.MockClientResponse(urlTemplate, fund);
+    /// </code>
+    /// </example>
+    public static string GetUrlTemplate<T>(T requestBuilder)
+        where T : BaseRequestBuilder
+    {
+        // Access the UrlTemplate property from the base class
+        var urlTemplateProperty = typeof(BaseRequestBuilder).GetProperty(
+            "UrlTemplate",
+            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public
+        );
+
+        if (urlTemplateProperty == null)
+        {
+            throw new InvalidOperationException(
+                "Could not find UrlTemplate property on BaseRequestBuilder. "
+                    + "This may indicate a breaking change in Kiota."
+            );
+        }
+
+        var urlTemplate = urlTemplateProperty.GetValue(requestBuilder) as string;
+
+        if (string.IsNullOrEmpty(urlTemplate))
+        {
+            throw new InvalidOperationException(
+                $"UrlTemplate is null or empty for request builder of type {typeof(T).Name}"
+            );
+        }
+
+        // Return the normalized template (strips {+baseurl}, converts params to {*})
+        return NormalizeUrlTemplate(urlTemplate);
     }
 
     /// <summary>

@@ -3,7 +3,10 @@ using Microsoft.Kiota.Abstractions;
 
 namespace Gainsway.Kiota.Testing;
 
-internal static class RequestInformationExtensions
+/// <summary>
+/// Provides extension methods for combining RequestInformation predicates.
+/// </summary>
+public static class RequestInformationExtensions
 {
     private class ReplaceParameterVisitor : ExpressionVisitor
     {
@@ -22,7 +25,13 @@ internal static class RequestInformationExtensions
         }
     }
 
-    internal static Expression<Predicate<RequestInformation>> And(
+    /// <summary>
+    /// Combines two RequestInformation predicates using logical AND.
+    /// </summary>
+    /// <param name="expr1">The first predicate expression.</param>
+    /// <param name="expr2">The second predicate expression.</param>
+    /// <returns>A combined predicate expression that evaluates both conditions.</returns>
+    public static Expression<Predicate<RequestInformation>> And(
         this Expression<Predicate<RequestInformation>> expr1,
         Expression<Predicate<RequestInformation>> expr2
     )

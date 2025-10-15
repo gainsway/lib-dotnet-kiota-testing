@@ -14,13 +14,61 @@ public static class KiotaClientMockExtensions
 {
     /// <summary>
     /// Creates a predicate expression to match a <see cref="RequestInformation"/> object
-    /// based on its URL template ending with the specified value.
+    /// based on its URL template matching the specified pattern.
     /// </summary>
-    /// <param name="urlTemplate">The URL template to match.</param>
+    /// <param name="urlTemplate">The URL template to match (e.g., "/api/funds/{id}").</param>
     /// <returns>An expression that evaluates to true if the URL template matches.</returns>
+    /// <remarks>
+    /// This method handles Kiota's URL template format which includes:
+    /// - {+baseurl} prefix (stripped for matching)
+    /// - Query parameter templates like {?param1,param2} (stripped for matching)
+    ///
+    /// Matching strategy:
+    /// 1. Strip {+baseurl} prefix from the request's URL template
+    /// 2. Strip query parameter templates {?...}
+    /// 3. Compare the cleaned path with the provided pattern
+    ///
+    /// Examples of valid matches:
+    /// - Pattern "/api/funds/{id}" matches "{+baseurl}/api/funds/{id}"
+    /// - Pattern "/api/funds/{id}" matches "{+baseurl}/api/funds/{id}{?expand}"
+    /// - Pattern "api/funds/{id}" matches "{+baseurl}/api/funds/{id}" (leading slash optional)
+    /// </remarks>
     private static Expression<Predicate<RequestInformation>> RequestInformationUrlTemplatePredicate(
         string urlTemplate
-    ) => req => Regex.Replace(req.UrlTemplate!, @"\{\?.*?\}", string.Empty).EndsWith(urlTemplate);
+    )
+    {
+        // Normalize the pattern: ensure it starts with / for consistent matching
+        var normalizedPattern = urlTemplate.StartsWith("/") ? urlTemplate : "/" + urlTemplate;
+
+        return req =>
+            !string.IsNullOrEmpty(req.UrlTemplate)
+            && NormalizeUrlTemplate(req.UrlTemplate)
+                .Equals(normalizedPattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Normalizes a Kiota URL template by removing the {+baseurl} prefix and query parameter templates.
+    /// </summary>
+    /// <param name="urlTemplate">The URL template to normalize.</param>
+    /// <returns>The normalized URL path.</returns>
+    private static string NormalizeUrlTemplate(string urlTemplate)
+    {
+        // Step 1: Remove {+baseurl} prefix if present
+        var cleanedUrl = urlTemplate.StartsWith("{+baseurl}")
+            ? urlTemplate.Substring("{+baseurl}".Length)
+            : urlTemplate;
+
+        // Step 2: Remove query parameter templates like {?param1,param2}
+        cleanedUrl = Regex.Replace(cleanedUrl, @"\{\?.*?\}", string.Empty);
+
+        // Step 3: Ensure leading slash for consistent matching
+        if (!cleanedUrl.StartsWith("/"))
+        {
+            cleanedUrl = "/" + cleanedUrl;
+        }
+
+        return cleanedUrl;
+    }
 
     /// <summary>
     /// Creates a Kiota generated client class that can be mocked.

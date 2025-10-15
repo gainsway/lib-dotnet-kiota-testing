@@ -27,6 +27,11 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
     - [Mocking Exception Responses](#mocking-exception-responses)
     - [Mocking POST/PUT with Request Body](#mocking-postput-with-request-body)
     - [URL Pattern Matching](#url-pattern-matching)
+    - [Writing Mocks with Natural Parameter Names](#writing-mocks-with-natural-parameter-names)
+    - [Finding Kiota's Actual Parameter Names (For Reference)](#finding-kiotas-actual-parameter-names-for-reference)
+    - [Smart Parameter Access Methods](#smart-parameter-access-methods)
+    - [Best Practice Examples](#best-practice-examples)
+    - [Why This Approach Works](#why-this-approach-works)
   - [🧪 Complete Test Example](#-complete-test-example)
   - [📚 API Reference](#-api-reference)
     - [`GetMockableClient<T>()`](#getmockableclientt)
@@ -36,6 +41,11 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
     - [`MockClientResponseException<T, R>()`](#mockclientresponseexceptiont-r)
     - [`MockClientCollectionResponseException<T, R>()`](#mockclientcollectionresponseexceptiont-r)
     - [`MockClientNoContentResponseException<T>()`](#mockclientnocontentresponseexceptiont)
+  - [🔍 Troubleshooting](#-troubleshooting)
+    - [KeyNotFoundException: The given key was not present in the dictionary](#keynotfoundexception-the-given-key-was-not-present-in-the-dictionary)
+    - [Mock Not Matching / Returning Null](#mock-not-matching--returning-null)
+    - [Finding Parameter Names for Complex Nested Paths](#finding-parameter-names-for-complex-nested-paths)
+    - [Using GetUrlTemplate() Helper](#using-geturltemplate-helper)
 
 ## 📦 Installation
 
@@ -51,16 +61,19 @@ using Gainsway.Kiota.Testing;
 // 1. Create a mockable client
 var mockClient = KiotaClientMockExtensions.GetMockableClient<MyKiotaClient>();
 
-// 2. Setup mock response
+// 2. Setup mock response using camelCase parameter names (natural C# style)
+// The library automatically tries naming variations (camelCase, kebab-case, URL-encoded)
+var itemId = "123";
 mockClient.MockClientResponse(
-    "/api/items/{id}",
-    new MyItem { Id = "123", Name = "Test Item" },
-    req => req.PathParameters["id"].ToString() == "123"
+    "/api/items/{itemId}",
+    new MyItem { Id = itemId, Name = "Test Item" },
+    req => req.GetPathParameter("itemId").ToString() == itemId
+    //     ^^^ Smart parameter access - tries multiple naming conventions
 );
 
 // 3. Use in your test
 var service = new MyService(mockClient);
-var result = await service.GetItemAsync("123");
+var result = await service.GetItemAsync(itemId);
 
 // 4. Assert
 Assert.That(result.Name, Is.EqualTo("Test Item"));
@@ -160,7 +173,7 @@ var fundId = Guid.NewGuid();
 
 mockedClient.MockClientNoContentResponse(
     "/api/funds/{id}",
-    req => req.PathParameters["id"].ToString() == fundId.ToString()
+    req => req.GetPathParameter("id").ToString() == fundId.ToString()
 );
 ```
 
@@ -179,11 +192,11 @@ var expectedFund = new Fund { Id = fundId, Name = "Specific Fund" };
 mockedClient.MockClientResponse(
     "/api/funds/{id}",
     expectedFund,
-    req => req.PathParameters["id"].ToString() == fundId.ToString()
+    req => req.GetPathParameter("id").ToString() == fundId.ToString()
 );
 ```
 
-**Key point:** The predicate ensures only requests with the matching `id` return this mock.
+**Key point:** The predicate ensures only requests with the matching `id` return this mock. The `GetPathParameter()` method automatically handles Kiota's naming variations.
 
 ---
 
@@ -199,8 +212,8 @@ var expectedActivity = new Activity { Id = activityId, Name = "Modified" };
 mockedClient.MockClientResponse(
     "/api/funds/{fundId}/activities/{activityId}",
     expectedActivity,
-    req => req.PathParameters["fundId"].ToString() == fundId.ToString()
-        && req.PathParameters["activityId"].ToString() == activityId.ToString()
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+        && req.GetPathParameter("activityId").ToString() == activityId.ToString()
 );
 ```
 
@@ -216,7 +229,7 @@ Combine multiple conditions for more specific matching:
 mockedClient.MockClientResponse(
     "/api/funds/{id}",
     expectedFund,
-    req => req.PathParameters["id"].ToString() == fundId.ToString()
+    req => req.GetPathParameter("id").ToString() == fundId.ToString()
         && req.HttpMethod == Method.GET
         && req.Headers.ContainsKey("Authorization")
 );
@@ -238,21 +251,21 @@ var fundId2 = Guid.NewGuid();
 mockedClient.MockClientResponse(
     "/api/funds/{id}",
     new Fund { Id = fundId1, Name = "Fund 1" },
-    req => req.PathParameters["id"].ToString() == fundId1.ToString()
+    req => req.GetPathParameter("id").ToString() == fundId1.ToString()
 );
 
 // Mock endpoint 2
 mockedClient.MockClientResponse(
     "/api/funds/{id}",
     new Fund { Id = fundId2, Name = "Fund 2" },
-    req => req.PathParameters["id"].ToString() == fundId2.ToString()
+    req => req.GetPathParameter("id").ToString() == fundId2.ToString()
 );
 
 // Mock related collection endpoint
 mockedClient.MockClientCollectionResponse(
     "/api/funds/{fundId}/activities",
     new List<Activity> { /* activities */ },
-    req => req.PathParameters["fundId"].ToString() == fundId1.ToString()
+    req => req.GetPathParameter("fundId").ToString() == fundId1.ToString()
 );
 ```
 
@@ -271,8 +284,8 @@ var activityId = Guid.NewGuid();
 mockedClient.MockClientResponse(
     "/api/funds/{fundId}/activities/{activityId}/modify",
     modifiedActivity,
-    req => req.PathParameters["fundId"].ToString() == fundId.ToString()
-        && req.PathParameters["activityId"].ToString() == activityId.ToString()
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+        && req.GetPathParameter("activityId").ToString() == activityId.ToString()
 );
 ```
 
@@ -292,7 +305,7 @@ Fund? nullFund = null;
 mockedClient.MockClientResponse(
     "/api/funds/{id}",
     nullFund,
-    req => req.PathParameters["id"].ToString() == nonExistentId.ToString()
+    req => req.GetPathParameter("id").ToString() == nonExistentId.ToString()
 );
 ```
 
@@ -343,7 +356,7 @@ var nonExistentId = Guid.NewGuid();
 mockedClient.MockClientResponseException<TestRequestBuilder, Fund>(
     "/api/funds/{id}",
     new ApiException("Fund not found") { ResponseStatusCode = 404 },
-    req => req.PathParameters["id"].ToString() == nonExistentId.ToString()
+    req => req.GetPathParameter("id").ToString() == nonExistentId.ToString()
 );
 
 // Mock 500 Internal Server Error for a collection endpoint
@@ -363,7 +376,7 @@ mockedClient.MockClientResponseException<TestRequestBuilder, Fund>(
 mockedClient.MockClientNoContentResponseException(
     "/api/funds/{id}",
     new ApiException("Conflict - Fund has active transactions") { ResponseStatusCode = 409 },
-    req => req.PathParameters["id"].ToString() == conflictingFundId.ToString()
+    req => req.GetPathParameter("id").ToString() == conflictingFundId.ToString()
 );
 ```
 
@@ -401,7 +414,7 @@ mockedClient.MockClientResponse(
     "/api/funds/{id}",
     updatedFund,
     req => req.HttpMethod == Method.PUT
-        && req.PathParameters["id"].ToString() == existingFundId.ToString()
+        && req.GetPathParameter("id").ToString() == existingFundId.ToString()
         && req.Content != null
 );
 
@@ -411,7 +424,7 @@ mockedClient.MockClientResponse(
     "/api/funds/{fundId}/activities",
     createdActivity,
     req => req.HttpMethod == Method.POST
-        && req.PathParameters["fundId"].ToString() == fundId.ToString()
+        && req.GetPathParameter("fundId").ToString() == fundId.ToString()
         && req.Headers.ContainsKey("Content-Type")
         && req.Headers["Content-Type"].Contains("application/json")
 );
@@ -421,7 +434,7 @@ mockedClient.MockClientResponse(
     "/api/funds/{id}",
     patchedFund,
     req => req.HttpMethod == Method.PATCH
-        && req.PathParameters["id"].ToString() == fundId.ToString()
+        && req.GetPathParameter("id").ToString() == fundId.ToString()
 );
 ```
 
@@ -431,27 +444,358 @@ mockedClient.MockClientResponse(
 
 ### URL Pattern Matching
 
-The library uses `EndsWith()` matching on URL templates after stripping Kiota's query parameter template placeholders:
+The library uses **exact path matching** on URL templates after normalizing Kiota's URL template format:
+
+**Normalization Process:**
+1. Strips the `{+baseurl}` prefix from Kiota's URL template
+2. Removes query parameter template syntax `{?param1,param2}`
+3. Ensures leading slash for consistent matching
+4. Performs case-insensitive exact match
+
+**Examples:**
 
 ```csharp
-// Kiota URL template (what's in req.UrlTemplate):
-"/api/funds/{id}{?expand,select}"
+// Kiota-generated URL template (what's in req.UrlTemplate):
+"{+baseurl}/api/funds/{id}{?expand,select}"
 
-// After regex strip of {?...}:
+// After normalization:
 "/api/funds/{id}"
 
-// Your mock URL template should be:
-"/api/funds/{id}"  // ✅ Matches
+// Your mock URL template:
+"/api/funds/{id}"  // ✅ Exact match
 
-// These will also match:
-"funds/{id}"       // ✅ Matches (uses EndsWith)
-"{id}"             // ✅ Matches (uses EndsWith)
+// These also work (leading slash optional):
+"api/funds/{id}"   // ✅ Normalized to "/api/funds/{id}"
 
-// This won't match:
-"/api/funds"       // ❌ Doesn't end with /{id}
+// These WON'T match (exact matching):
+"/api/funds"                    // ❌ Different path
+"/api/funds/{id}/activities"   // ❌ Different path
+"funds/{id}"                    // ❌ Missing "/api" prefix
+```
+
+**Why Exact Matching?**
+
+Exact matching allows you to mock similar endpoints independently:
+
+```csharp
+// Mock different endpoints with the same base path
+mockedClient.MockClientResponse(
+    "/api/funds/{id}",           // Matches only GET /api/funds/{id}
+    fund
+);
+
+mockedClient.MockClientCollectionResponse(
+    "/api/funds/{id}/activities", // Matches only GET /api/funds/{id}/activities
+    activities
+);
+
+mockedClient.MockClientResponse(
+    "/api/funds/{id}/seeding-metadata", // Matches only GET /api/funds/{id}/seeding-metadata
+    metadata
+);
+```
+
+Each mock will only match its specific endpoint, even when combined with path parameter predicates:
+
+```csharp
+// These work independently with different fundIds
+mockedClient.MockClientResponse(
+    "/api/funds/{id}",
+    fund1,
+    req => req.GetPathParameter("id").ToString() == fundId1.ToString()
+);
+
+mockedClient.MockClientResponse(
+    "/api/funds/{id}",
+    fund2,
+    req => req.GetPathParameter("id").ToString() == fundId2.ToString()
+);
 ```
 
 **Note:** The regex pattern `@"\{\?.*?\}"` only removes Kiota's optional parameter syntax, not actual query string values.
+
+### Writing Mocks with Natural Parameter Names
+
+**Best Practice:** Write your mocks using **camelCase** parameter names (matching your C# variable naming conventions). The library provides smart parameter access methods that automatically try multiple naming variations.
+
+**Recommended Pattern:**
+
+```csharp
+// ✅ Use natural camelCase names in your tests
+var fundId = Guid.NewGuid();
+
+_fundManagementServiceClient.MockClientResponse(
+    "/api/funds/{fundId}",
+    fund,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+    //     ^^^ Automatically tries: fundId, fund-id, fund%2Did, FundId
+);
+```
+
+**How It Works:**
+
+The library provides extension methods that automatically try common naming variations when accessing path parameters:
+
+- **`GetPathParameter(name)`** - Gets a parameter, throws clear exception if not found
+- **`TryGetPathParameter(name, out value)`** - Safe version that returns bool
+
+When you access `req.GetPathParameter("fundId")`, the library tries:
+1. `"fundId"` (camelCase - as you provided)
+2. `"fund-id"` (kebab-case)
+3. `"fund%2Did"` (URL-encoded kebab-case)
+4. `"FundId"` (PascalCase)
+
+**Example with Error Handling:**
+
+```csharp
+// If Kiota uses a different parameter name, you'll get a clear error:
+try
+{
+    var id = req.GetPathParameter("fundId");
+}
+catch (KeyNotFoundException ex)
+{
+    // Exception message shows:
+    // - All naming variations tried
+    // - Kiota's actual URL template
+    // - Available parameter keys
+    // - Guidance on how to fix
+}
+```
+
+**Using TryGetPathParameter for Optional Parameters:**
+
+```csharp
+// Safe version that doesn't throw
+if (req.TryGetPathParameter("fundId", out var id))
+{
+    return id.ToString() == fundId.ToString();
+}
+return false;
+```
+
+### Finding Kiota's Actual Parameter Names (For Reference)
+
+In most cases, you won't need to know Kiota's exact parameter names thanks to the smart parameter access methods. However, if you need to debug or understand what Kiota generated:
+
+**Solution 1: Inspect Generated Code**
+
+Look at the Kiota-generated request builder file:
+
+```csharp
+// Example: Open FundItemRequestBuilder.cs (generated by Kiota)
+public class FundItemRequestBuilder : BaseRequestBuilder
+{
+    public FundItemRequestBuilder(...) 
+        : base(requestAdapter, "{+baseurl}/api/funds/{fund%2Did}", pathParameters)
+    //                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    //                          Kiota uses "fund-id" (URL-encoded hyphen: %2D)
+}
+
+// In your tests, you can use any variation:
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}",  // Your natural naming
+    fund,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+    //                          ^^^^^^^^ Will find "fund-id", "fund%2Did", etc.
+);
+```
+
+**Solution 2: Runtime Discovery (Debugging)**
+
+Add logging to see what the library finds:
+
+```csharp
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}",
+    fund,
+    req => {
+        // The extension method will show you all available keys if it fails
+        try
+        {
+            var id = req.GetPathParameter("fundId");
+            Console.WriteLine($"Found parameter with value: {id}");
+            return id.ToString() == fundId.ToString();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            Console.WriteLine(ex.Message);  // Shows all variations tried and available keys
+            throw;
+        }
+    }
+);
+```
+
+**Solution 3: Use GetUrlTemplate() Helper**
+
+Extract the exact URL template from Kiota's generated request builder:
+
+```csharp
+// Get the template from a request builder instance
+var urlTemplate = KiotaClientMockExtensions.GetUrlTemplate(
+    mockClient.Api.Funds[fundId]
+);
+// Returns: "/api/funds/{fund-id}" (Kiota's exact parameter name, URL-decoded)
+
+// Use it in your mock
+mockedClient.MockClientResponse(
+    urlTemplate,  // Use Kiota's exact template
+    fund,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+    //     Still use natural naming in predicates - library handles the mismatch
+);
+```
+
+---
+
+### Smart Parameter Access Methods
+
+The library provides extension methods that automatically handle Kiota's parameter naming variations:
+
+**GetPathParameter() - Recommended**
+
+Throws a clear, descriptive exception if the parameter is not found:
+
+```csharp
+// ✅ Automatic variation handling with clear error messages
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}",
+    fund,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+);
+
+// If "fundId" doesn't match any variation, you get a helpful exception showing:
+// - All naming variations tried (fundId, fund-id, fund%2Did, FundId)
+// - Kiota's actual URL template
+// - Available parameter keys
+// - How to fix the issue
+```
+
+**TryGetPathParameter() - For Conditional Logic**
+
+Returns bool without throwing exceptions:
+
+```csharp
+// ✅ Safe approach for optional parameters
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}",
+    fund,
+    req => {
+        if (req.TryGetPathParameter("fundId", out var id))
+        {
+            return id.ToString() == fundId.ToString();
+        }
+        return false;
+    }
+);
+```
+
+**Multiple Parameters:**
+
+```csharp
+// ✅ Clean and natural - just use GetPathParameter for each parameter
+var fundId = Guid.NewGuid();
+var activityId = Guid.NewGuid();
+
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}/activities/{activityId}",
+    activity,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+        && req.GetPathParameter("activityId").ToString() == activityId.ToString()
+);
+```
+
+**Naming Variations Tried:**
+
+When you call `GetPathParameter("fundId")` or `TryGetPathParameter("fundId", out var id)`, the library tries:
+1. `fundId` (original - camelCase)
+2. `fund-id` (kebab-case)
+3. `fund%2Did` (URL-encoded kebab-case)
+4. `FundId` (PascalCase)
+
+This handles all common naming conventions that Kiota might generate.
+
+---
+
+### Best Practice Examples
+
+**Write Tests with Natural CamelCase:**
+
+```csharp
+// ✅ Use idiomatic C# naming with smart parameter access
+var fundId = Guid.NewGuid();
+
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}",
+    fund,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+);
+
+// Works automatically with any of these Kiota-generated names:
+// - fundId (camelCase)
+// - fund-id (kebab-case)
+// - fund%2Did (URL-encoded)
+// - FundId (PascalCase)
+```
+
+**Multiple Parameters:**
+
+```csharp
+var fundId = Guid.NewGuid();
+var activityId = Guid.NewGuid();
+
+// Clean and natural - library handles naming variations
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}/activities/{activityId}",
+    activity,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+        && req.GetPathParameter("activityId").ToString() == activityId.ToString()
+);
+```
+
+**Optional Parameters with TryGetPathParameter:**
+
+```csharp
+// When parameter might not be present
+mockedClient.MockClientResponse(
+    "/api/search",
+    results,
+    req => {
+        if (req.TryGetPathParameter("query", out var q))
+        {
+            return q.ToString() == searchQuery;
+        }
+        return true; // Match all requests without query parameter
+    }
+);
+```
+
+---
+
+### Why This Approach Works
+
+**URL Pattern Matching:** The library normalizes URL templates by removing Kiota-specific syntax and decoding parameter names:
+- Your pattern: `/api/funds/{fundId}` → normalized to `/api/funds/{fundid}` (lowercase for comparison)
+- Kiota's request: `/api/funds/{fund-id}` → normalized to `/api/funds/{fund-id}`  
+- Kiota's request: `/api/funds/{fund%2Did}` → normalized to `/api/funds/{fund-id}` (URL-decoded)
+- **Result:** Pattern matches if structure is the same (same number and position of parameters)
+
+**Smart Parameter Access:** The extension methods handle naming variations automatically:
+- You write: `req.GetPathParameter("fundId")`
+- Library tries: `fundId`, `fund-id`, `fund%2Did`, `FundId`
+- **Result:** Works with any Kiota naming convention
+
+**Parameter Validation:** Your predicate checks the actual parameter values:
+- Validates that the correct ID is being used
+- Catches bugs where wrong IDs are passed
+- Documents your test expectations clearly
+
+**Benefits:**
+1. **Natural C# Naming**: Write tests using idiomatic camelCase
+2. **Automatic Variation Handling**: Library tries multiple naming conventions
+3. **Clear Error Messages**: Know exactly what went wrong and how to fix it
+4. **Contract Validation**: You still verify parameter values
+5. **Maintainable**: Test code is clear and readable
 
 ---
 
@@ -491,7 +835,7 @@ public class FundServiceTests
         _mockClient.MockClientResponse(
             "/api/funds/{id}",
             expectedFund,
-            req => req.PathParameters["id"].ToString() == fundId.ToString()
+            req => req.GetPathParameter("id").ToString() == fundId.ToString()
         );
 
         // Act
@@ -518,7 +862,7 @@ public class FundServiceTests
         _mockClient.MockClientCollectionResponse(
             "/api/funds/{fundId}/activities",
             expectedActivities,
-            req => req.PathParameters["fundId"].ToString() == fundId.ToString()
+            req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
         );
 
         // Act
@@ -538,7 +882,7 @@ public class FundServiceTests
 
         _mockClient.MockClientNoContentResponse(
             "/api/funds/{id}",
-            req => req.PathParameters["id"].ToString() == fundId.ToString()
+            req => req.GetPathParameter("id").ToString() == fundId.ToString()
         );
 
         // Act & Assert - Should not throw
@@ -570,7 +914,7 @@ public class FundServiceTests
         _mockClient.MockClientResponse(
             "/api/funds/{id}",
             expectedFund,
-            req => req.PathParameters["id"].ToString() == fundId.ToString()
+            req => req.GetPathParameter("id").ToString() == fundId.ToString()
         );
 
         // Act
@@ -662,5 +1006,188 @@ Mocks an exception for a no-content endpoint.
 - `urlTemplate` (string) - The URL pattern to match
 - `exception` (Exception) - The exception to throw
 - `requestInfoPredicate` (optional) - Additional matching conditions
+
+---
+
+## 🔍 Troubleshooting
+
+### KeyNotFoundException: The given key was not present in the dictionary
+
+**Error:**
+```
+System.Collections.Generic.KeyNotFoundException: The given key 'id' was not present in the dictionary.
+Path parameter 'id' not found in RequestInformation.PathParameters.
+
+Tried the following naming variations:
+  - id (original)
+  - id (kebab-case)
+  - id (URL-encoded kebab-case)
+  - Id (PascalCase)
+
+Kiota's actual URL template: {+baseurl}/api/funds/{fund-id}
+
+Available path parameter keys:
+  - baseurl
+  - fund-id
+
+To fix this, check Kiota's generated code (e.g., *RequestBuilder.cs files) to find the exact parameter name used in the URL template.
+```
+
+**Cause:** The parameter name you're using doesn't match any of the naming variations that Kiota generated.
+
+**Solution:** The error message shows you exactly what's available. Update your mock to use the actual parameter name shown:
+
+```csharp
+// ❌ Your code tried "id"
+req => req.GetPathParameter("id").ToString() == fundId.ToString()
+
+// ✅ Use the actual parameter name from the error message
+req => req.GetPathParameter("fund-id").ToString() == fundId.ToString()
+
+// OR update your pattern to use natural naming and it will work:
+_mockClient.MockClientResponse(
+    "/api/funds/{fundId}",  // Use natural camelCase
+    fund,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+    //                          ^^^^^^^^ Will find "fund-id" automatically
+);
+```
+
+### Mock Not Matching / Returning Null
+
+**Problem:** Your mock is set up but the service still returns null or throws "not configured".
+
+**Common Causes:**
+
+1. **Parameter name mismatch:**
+   ```csharp
+   // Use GetPathParameter - it tries variations automatically and gives clear errors
+   mockedClient.MockClientResponse(
+       "/api/funds/{fundId}",  // Use natural naming
+       fund,
+       req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+   );
+   ```
+
+2. **URL pattern mismatch:**
+   ```csharp
+   // Mock: "/api/funds/{id}"
+   // Actual request: "/api/funds/{id}/activities"
+   // These won't match - paths must be exact
+   ```
+
+3. **Predicate always returns false:**
+   ```csharp
+   mockedClient.MockClientResponse(
+       "/api/funds/{fundId}",
+       fund,
+       req => req.GetPathParameter("fundId").ToString() == wrongId  // ❌ Wrong ID value
+   );
+   ```
+
+**Solution:** The `GetPathParameter()` method provides clear error messages:
+
+```csharp
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}",
+    fund,
+    req => {
+        // GetPathParameter automatically:
+        // - Tries multiple naming variations
+        // - Shows clear error if not found
+        // - Lists available keys
+        // - Shows Kiota's URL template
+        var id = req.GetPathParameter("fundId");
+        Console.WriteLine($"Found parameter value: {id}");
+        return id.ToString() == fundId.ToString();
+    }
+);
+```
+    req => {
+        // Debug: Log all parameter keys and values
+        Console.WriteLine("=== Request Debug Info ===");
+        Console.WriteLine($"URL: {req.UrlTemplate}");
+        Console.WriteLine($"Parameters:");
+        foreach (var kvp in req.PathParameters)
+        {
+            Console.WriteLine($"  {kvp.Key} = {kvp.Value}");
+        }
+        
+        // Now check with the correct key
+        return req.GetPathParameter("fund-id").ToString() == fundId.ToString();
+    }
+);
+```
+
+### Test Fails After Regenerating Kiota Client
+
+**Problem:** Tests were passing, but after regenerating your Kiota client, you get `KeyNotFoundException`.
+
+**Cause:** The API contract changed (parameter renamed, path changed) and Kiota generated new code.
+
+**Why This Is Good:** Your tests caught a breaking change! This is exactly what explicit parameter checking is designed to do.
+
+**Solution:**
+
+1. **Check what changed** in the generated code
+2. **Verify with your API team** if this was intentional
+3. **Update your tests** to reflect the new contract:
+   ```csharp
+   // Old (before regeneration)
+   req => req.PathParameters["fundId"] == id
+   
+   // New (after API change)
+   req => req.PathParameters["fund-id"] == id
+   ```
+
+### Finding Parameter Names for Complex Nested Paths
+
+**Example:** `/api/funds/{fundId}/activities/{activityId}/comments/{commentId}`
+
+**Solution:** Check the deepest request builder:
+
+```csharp
+// Look in: CommentItemRequestBuilder.cs
+public CommentItemRequestBuilder(...) 
+    : base(requestAdapter, 
+           "{+baseurl}/api/funds/{fund%2Did}/activities/{activity%2Did}/comments/{comment%2Did}", 
+           pathParameters)
+
+// Parameter names are:
+// - fund-id
+// - activity-id  
+// - comment-id
+
+// Use them in your mock:
+mockedClient.MockClientResponse(
+    "/api/funds/{fund-id}/activities/{activity-id}/comments/{comment-id}",
+    comment,
+    req => req.GetPathParameter("fund-id").ToString() == fundId.ToString()
+        && req.GetPathParameter("activity-id").ToString() == activityId.ToString()
+        && req.GetPathParameter("comment-id").ToString() == commentId.ToString()
+);
+```
+
+### Using GetUrlTemplate() Helper
+
+**Purpose:** Extract URL templates programmatically from Kiota's generated request builders.
+
+**Usage:**
+```csharp
+// Get template from a request builder instance
+var urlTemplate = KiotaClientMockExtensions.GetUrlTemplate(
+    mockClient.Api.Funds[fundId]
+);
+// Returns: "/api/funds/{*}"
+
+// Use in mock (but still need to check parameter keys explicitly)
+mockedClient.MockClientResponse(
+    urlTemplate,
+    fund,
+    req => req.GetPathParameter("fund-id").ToString() == fundId.ToString()
+);
+```
+
+**Note:** `GetUrlTemplate()` returns wildcards for parameters (`{*}`), which is useful for the URL pattern. However, you still need to know the exact parameter key names (from generated code) for your predicates.
 
 

@@ -13,7 +13,8 @@ namespace Gainsway.Kiota.Testing;
 public static class KiotaClientMockExtensions
 {
     /// <summary>
-    /// Helper method that performs URL template matching.
+    /// Helper method that performs URL template matching without normalizing parameter names to wildcards.
+    /// Matches exact path structure while preserving parameter names.
     /// </summary>
     private static bool MatchesUrlTemplate(
         RequestInformation req,
@@ -34,7 +35,7 @@ public static class KiotaClientMockExtensions
     /// Creates a predicate expression to match a <see cref="RequestInformation"/> object
     /// based on its URL template matching the specified pattern.
     /// </summary>
-    /// <param name="urlTemplate">The URL template to match (e.g., "/api/funds/{*}").</param>
+    /// <param name="urlTemplate">The URL template to match (e.g., "/api/funds/{fundId}").</param>
     /// <returns>An expression that evaluates to true if the URL template matches.</returns>
     /// <remarks>
     /// This method handles Kiota's URL template format which includes:
@@ -45,41 +46,45 @@ public static class KiotaClientMockExtensions
     /// Matching strategy:
     /// 1. Strip {+baseurl} prefix from the request's URL template
     /// 2. Strip query parameter templates {?...}
-    /// 3. Normalize all path parameters to {*} wildcard for flexible matching
-    /// 4. Compare the cleaned path with the provided pattern
+    /// 3. Normalize parameter name encoding (e.g., {fund%2Did} -> {fund-id})
+    /// 4. Compare the normalized paths
     ///
-    /// Path Parameter Matching:
-    /// Kiota may generate different parameter names than what appears in your OpenAPI spec.
-    /// For example, {id} might become {fund-id} or {fund%2Did} (URL-encoded).
-    /// To handle this, all path parameters are normalized to {*} wildcards.
+    /// Parameter Name Handling:
+    /// Unlike previous versions, this library does NOT normalize parameter names to wildcards.
+    /// Instead, it preserves the specific parameter names in the URL pattern and provides
+    /// smart parameter access methods that try multiple naming conventions automatically.
     ///
-    /// Examples of valid matches:
-    /// - Pattern "/api/funds/{*}" matches "{+baseurl}/api/funds/{id}"
-    /// - Pattern "/api/funds/{*}" matches "{+baseurl}/api/funds/{fund-id}"
-    /// - Pattern "/api/funds/{*}" matches "{+baseurl}/api/funds/{fund%2Did}"
-    /// - Pattern "/api/funds/{*}/activities/{*}" matches "{+baseurl}/api/funds/{id}/activities/{activityId}"
-    /// - Pattern "api/funds/{*}" works too (leading slash optional)
+    /// When accessing path parameters in predicates, use the extension methods:
+    /// - req.TryGetPathParameter("fundId", out var id) - Safe, returns bool
+    /// - req.GetPathParameter("fundId") - Throws descriptive exception if not found
     ///
-    /// Note: If you need to differentiate between similar endpoints (e.g., /api/funds/{id} vs /api/funds/{id}/metadata),
-    /// use the full path with wildcards and optionally add a requestInfoPredicate to check other properties like HttpMethod.
+    /// These methods automatically try variations like: fundId, fund-id, fund%2Did, FundId
+    ///
+    /// Examples:
+    /// - Pattern "/api/funds/{fundId}" matches "{+baseurl}/api/funds/{fund-id}"
+    /// - Pattern "/api/funds/{fundId}" matches "{+baseurl}/api/funds/{fund%2Did}"
+    /// - Pattern "/api/funds/{fundId}/activities/{activityId}" matches "{+baseurl}/api/funds/{fund-id}/activities/{activity-id}"
+    ///
+    /// The URL structure must match exactly - different endpoints require separate mocks:
+    /// - "/api/funds/{id}" will NOT match "/api/funds/{id}/activities"
     /// </remarks>
     private static Expression<Predicate<RequestInformation>> RequestInformationUrlTemplatePredicate(
         string urlTemplate
     )
     {
-        // Normalize the user-provided pattern the same way we normalize the request
-        // This converts {id}, {fundId}, etc. all to {*} wildcards
+        // Normalize the user-provided pattern (strips baseurl, query params, normalizes encoding)
         var normalizedPattern = NormalizeUrlTemplate(urlTemplate);
 
         return req => MatchesUrlTemplate(req, normalizedPattern, urlTemplate);
     }
 
     /// <summary>
-    /// Normalizes a Kiota URL template by removing the {+baseurl} prefix and query parameter templates.
-    /// Also handles URL-encoded parameter names like {fund%2Did} by converting them to simple placeholders.
+    /// Normalizes a Kiota URL template by removing the {+baseurl} prefix, query parameter templates,
+    /// and normalizing URL-encoded parameter names (e.g., {fund%2Did} -> {fund-id}).
+    /// Does NOT convert parameter names to wildcards - preserves the specific parameter names.
     /// </summary>
     /// <param name="urlTemplate">The URL template to normalize.</param>
-    /// <returns>The normalized URL path.</returns>
+    /// <returns>The normalized URL path with preserved parameter names.</returns>
     private static string NormalizeUrlTemplate(string urlTemplate)
     {
         // Step 1: Remove {+baseurl} prefix if present
@@ -91,10 +96,18 @@ public static class KiotaClientMockExtensions
         cleanedUrl = Regex.Replace(cleanedUrl, @"\{\?.*?\}", string.Empty);
 
         // Step 3: Normalize URL-encoded parameter names
-        // Kiota generates things like {fund%2Did} which is {fund-id} URL-encoded
-        // We need to decode these so they match user patterns like {id}
-        // Strategy: Replace any {paramName} with a normalized placeholder {*}
-        cleanedUrl = Regex.Replace(cleanedUrl, @"\{[^}]+\}", "{*}");
+        // Kiota generates things like {fund%2Did} which should match {fund-id}
+        // We URL-decode the parameter names but keep the structure
+        cleanedUrl = Regex.Replace(
+            cleanedUrl,
+            @"\{([^}]+)\}",
+            match =>
+            {
+                var paramName = match.Groups[1].Value;
+                var decoded = Uri.UnescapeDataString(paramName);
+                return $"{{{decoded}}}";
+            }
+        );
 
         // Step 4: Ensure leading slash for consistent matching
         if (!cleanedUrl.StartsWith("/"))
@@ -108,18 +121,23 @@ public static class KiotaClientMockExtensions
     /// <summary>
     /// Extracts and normalizes the URL template from a Kiota-generated request builder.
     /// This allows you to use the exact template from generated code instead of hardcoding paths.
+    /// Returns the template with URL-decoded parameter names (e.g., {fund%2Did} -> {fund-id}).
     /// </summary>
     /// <typeparam name="T">The type of the request builder.</typeparam>
     /// <param name="requestBuilder">The Kiota-generated request builder instance.</param>
-    /// <returns>The normalized URL template suitable for mocking.</returns>
+    /// <returns>The normalized URL template with preserved parameter names.</returns>
     /// <example>
     /// <code>
-    /// // Instead of hardcoding:
-    /// mockedClient.MockClientResponse("/api/funds/{*}", fund);
-    ///
-    /// // Use Kiota's generated template:
+    /// // Get the exact template from Kiota's generated code
     /// var urlTemplate = KiotaClientMockExtensions.GetUrlTemplate(mockClient.Api.Funds[fundId]);
-    /// mockedClient.MockClientResponse(urlTemplate, fund);
+    /// // Returns: "/api/funds/{fund-id}" (if that's what Kiota generated)
+    ///
+    /// // Use it in your mock
+    /// mockedClient.MockClientResponse(
+    ///     urlTemplate,
+    ///     fund,
+    ///     req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+    /// );
     /// </code>
     /// </example>
     public static string GetUrlTemplate<T>(T requestBuilder)
@@ -148,7 +166,7 @@ public static class KiotaClientMockExtensions
             );
         }
 
-        // Return the normalized template (strips {+baseurl}, converts params to {*})
+        // Return the normalized template (strips {+baseurl}, decodes param names, but preserves them)
         return NormalizeUrlTemplate(urlTemplate);
     }
 

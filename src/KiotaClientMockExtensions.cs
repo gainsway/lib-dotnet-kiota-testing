@@ -67,8 +67,9 @@ public static class KiotaClientMockExtensions
         string urlTemplate
     )
     {
-        // Normalize the pattern: ensure it starts with / for consistent matching
-        var normalizedPattern = urlTemplate.StartsWith("/") ? urlTemplate : "/" + urlTemplate;
+        // Normalize the user-provided pattern the same way we normalize the request
+        // This converts {id}, {fundId}, etc. all to {*} wildcards
+        var normalizedPattern = NormalizeUrlTemplate(urlTemplate);
 
         return req => MatchesUrlTemplate(req, normalizedPattern, urlTemplate);
     }

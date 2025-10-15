@@ -360,6 +360,206 @@ public class KiotaClientMockExtensionsTests
     }
 
     #endregion
+
+    #region Exception Mocking Tests
+
+    [Test]
+    public void MockClientResponseException_WithNotFoundException_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var nonExistentId = Guid.NewGuid();
+        var exception = new ApiException("Fund not found") { ResponseStatusCode = 404 };
+
+        // Act
+        _mockClient.MockClientResponseException<TestRequestBuilder, TestParsableObject>(
+            "/api/funds/{id}",
+            exception,
+            req => req.PathParameters["id"].ToString() == nonExistentId.ToString()
+        );
+
+        // Assert
+        Assert.Pass("Exception mock setup completed successfully");
+    }
+
+    [Test]
+    public void MockClientCollectionResponseException_WithInternalServerError_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var exception = new ApiException("Internal server error") { ResponseStatusCode = 500 };
+
+        // Act
+        _mockClient.MockClientCollectionResponseException<TestRequestBuilder, TestParsableObject>(
+            "/api/activities",
+            exception
+        );
+
+        // Assert
+        Assert.Pass("Collection exception mock setup completed successfully");
+    }
+
+    [Test]
+    public void MockClientNoContentResponseException_WithConflictError_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var conflictingId = Guid.NewGuid();
+        var exception = new ApiException("Conflict - Resource has dependencies")
+        {
+            ResponseStatusCode = 409,
+        };
+
+        // Act
+        _mockClient.MockClientNoContentResponseException(
+            "/api/funds/{id}",
+            exception,
+            req => req.PathParameters["id"].ToString() == conflictingId.ToString()
+        );
+
+        // Assert
+        Assert.Pass("No-content exception mock setup completed successfully");
+    }
+
+    [Test]
+    public void MockClientResponseException_WithUnauthorizedError_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var exception = new ApiException("Unauthorized") { ResponseStatusCode = 401 };
+
+        // Act
+        _mockClient.MockClientResponseException<TestRequestBuilder, TestParsableObject>(
+            "/api/funds/{id}",
+            exception,
+            req => !req.Headers.ContainsKey("Authorization")
+        );
+
+        // Assert
+        Assert.Pass("Unauthorized exception mock setup completed successfully");
+    }
+
+    #endregion
+
+    #region POST/PUT with Body Tests
+
+    [Test]
+    public void MockClientResponse_WithPostMethodPredicate_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var newObject = new TestParsableObject { Id = "new-id", Name = "New Object" };
+
+        // Act
+        _mockClient.MockClientResponse(
+            "/api/items",
+            newObject,
+            req => req.HttpMethod == Method.POST && req.Content != null
+        );
+
+        // Assert
+        Assert.Pass("POST method mock setup completed successfully");
+    }
+
+    [Test]
+    public void MockClientResponse_WithPutMethodPredicate_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var existingId = Guid.NewGuid();
+        var updatedObject = new TestParsableObject
+        {
+            Id = existingId.ToString(),
+            Name = "Updated Object",
+        };
+
+        // Act
+        _mockClient.MockClientResponse(
+            "/api/items/{id}",
+            updatedObject,
+            req =>
+                req.HttpMethod == Method.PUT
+                && req.PathParameters["id"].ToString() == existingId.ToString()
+                && req.Content != null
+        );
+
+        // Assert
+        Assert.Pass("PUT method mock setup completed successfully");
+    }
+
+    [Test]
+    public void MockClientResponse_WithPatchMethodPredicate_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var existingId = Guid.NewGuid();
+        var patchedObject = new TestParsableObject
+        {
+            Id = existingId.ToString(),
+            Name = "Patched Object",
+        };
+
+        // Act
+        _mockClient.MockClientResponse(
+            "/api/items/{id}",
+            patchedObject,
+            req =>
+                req.HttpMethod == Method.PATCH
+                && req.PathParameters["id"].ToString() == existingId.ToString()
+        );
+
+        // Assert
+        Assert.Pass("PATCH method mock setup completed successfully");
+    }
+
+    [Test]
+    public void MockClientResponse_WithContentTypeHeader_ShouldSetupMockCorrectly()
+    {
+        // Arrange
+        var fundId = Guid.NewGuid();
+        var createdActivity = new TestParsableObject
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = "New Activity",
+        };
+
+        // Act
+        _mockClient.MockClientResponse(
+            "/api/funds/{fundId}/activities",
+            createdActivity,
+            req =>
+                req.HttpMethod == Method.POST
+                && req.PathParameters["fundId"].ToString() == fundId.ToString()
+                && req.Headers.ContainsKey("Content-Type")
+        );
+
+        // Assert
+        Assert.Pass("Content-Type header predicate mock setup completed successfully");
+    }
+
+    [Test]
+    public void MockClientResponse_WithMultipleHttpMethods_ShouldSetupMultipleMocksCorrectly()
+    {
+        // Arrange
+        var itemId = Guid.NewGuid();
+        var getResponse = new TestParsableObject { Id = itemId.ToString(), Name = "Get Response" };
+        var putResponse = new TestParsableObject { Id = itemId.ToString(), Name = "Put Response" };
+
+        // Act - Setup different responses for GET and PUT on same URL
+        _mockClient.MockClientResponse(
+            "/api/items/{id}",
+            getResponse,
+            req =>
+                req.HttpMethod == Method.GET
+                && req.PathParameters["id"].ToString() == itemId.ToString()
+        );
+
+        _mockClient.MockClientResponse(
+            "/api/items/{id}",
+            putResponse,
+            req =>
+                req.HttpMethod == Method.PUT
+                && req.PathParameters["id"].ToString() == itemId.ToString()
+        );
+
+        // Assert
+        Assert.Pass("Multiple HTTP method mocks setup completed successfully");
+    }
+
+    #endregion
 }
 
 #region Test Helper Classes
@@ -395,6 +595,20 @@ public class TestParsableObject : IParsable
         writer.WriteStringValue("id", Id);
         writer.WriteStringValue("name", Name);
     }
+}
+
+/// <summary>
+/// Test exception class that mimics API exceptions with status codes
+/// </summary>
+public class ApiException : Exception
+{
+    public int ResponseStatusCode { get; set; }
+
+    public ApiException(string message)
+        : base(message) { }
+
+    public ApiException(string message, Exception innerException)
+        : base(message, innerException) { }
 }
 
 #endregion

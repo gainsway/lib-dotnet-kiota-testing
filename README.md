@@ -24,6 +24,8 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
     - [Mocking Null Responses](#mocking-null-responses)
     - [Mocking Empty Collections](#mocking-empty-collections)
     - [Mocking with Query String Parameters](#mocking-with-query-string-parameters)
+    - [Mocking Exception Responses](#mocking-exception-responses)
+    - [Mocking POST/PUT with Request Body](#mocking-postput-with-request-body)
     - [URL Pattern Matching](#url-pattern-matching)
   - [🧪 Complete Test Example](#-complete-test-example)
   - [📚 API Reference](#-api-reference)
@@ -31,6 +33,9 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
     - [`MockClientResponse<T, R>()`](#mockclientresponset-r)
     - [`MockClientCollectionResponse<T, R>()`](#mockclientcollectionresponset-r)
     - [`MockClientNoContentResponse<T>()`](#mockclientnocontentresponset)
+    - [`MockClientResponseException<T, R>()`](#mockclientresponseexceptiont-r)
+    - [`MockClientCollectionResponseException<T, R>()`](#mockclientcollectionresponseexceptiont-r)
+    - [`MockClientNoContentResponseException<T>()`](#mockclientnocontentresponseexceptiont)
 
 ## 📦 Installation
 
@@ -328,6 +333,102 @@ mockedClient.MockClientCollectionResponse(
 
 **Important:** Query parameters are accessed through `req.QueryParameters`, not embedded in the URL template string.
 
+### Mocking Exception Responses
+
+Mock endpoints that throw exceptions (e.g., 404 Not Found, 500 Internal Server Error):
+
+```csharp
+// Mock 404 Not Found for a single object endpoint
+var nonExistentId = Guid.NewGuid();
+mockedClient.MockClientResponseException<TestRequestBuilder, Fund>(
+    "/api/funds/{id}",
+    new ApiException("Fund not found") { ResponseStatusCode = 404 },
+    req => req.PathParameters["id"].ToString() == nonExistentId.ToString()
+);
+
+// Mock 500 Internal Server Error for a collection endpoint
+mockedClient.MockClientCollectionResponseException<TestRequestBuilder, Activity>(
+    "/api/activities",
+    new ApiException("Internal server error") { ResponseStatusCode = 500 }
+);
+
+// Mock unauthorized access (401)
+mockedClient.MockClientResponseException<TestRequestBuilder, Fund>(
+    "/api/funds/{id}",
+    new ApiException("Unauthorized") { ResponseStatusCode = 401 },
+    req => !req.Headers.ContainsKey("Authorization")
+);
+
+// Mock exception for no-content operations (e.g., DELETE)
+mockedClient.MockClientNoContentResponseException(
+    "/api/funds/{id}",
+    new ApiException("Conflict - Fund has active transactions") { ResponseStatusCode = 409 },
+    req => req.PathParameters["id"].ToString() == conflictingFundId.ToString()
+);
+```
+
+**When to use:** Testing error handling, validation failures, authorization issues, or any scenario where the API should throw an exception.
+
+### Mocking POST/PUT with Request Body
+
+Mock endpoints that accept request bodies and verify the content:
+
+```csharp
+// Mock POST to create a new fund
+var newFund = new Fund 
+{ 
+    Id = Guid.NewGuid(), 
+    Name = "New Fund",
+    Status = FundStatus.Active 
+};
+
+mockedClient.MockClientResponse(
+    "/api/funds",
+    newFund,
+    req => req.HttpMethod == Method.POST
+        && req.Content != null
+);
+
+// Mock PUT to update a fund with body validation
+var updatedFund = new Fund 
+{ 
+    Id = existingFundId, 
+    Name = "Updated Fund",
+    Status = FundStatus.Closed
+};
+
+mockedClient.MockClientResponse(
+    "/api/funds/{id}",
+    updatedFund,
+    req => req.HttpMethod == Method.PUT
+        && req.PathParameters["id"].ToString() == existingFundId.ToString()
+        && req.Content != null
+);
+
+// Mock POST with specific body property validation
+// Note: You may need to deserialize req.Content to inspect body properties
+mockedClient.MockClientResponse(
+    "/api/funds/{fundId}/activities",
+    createdActivity,
+    req => req.HttpMethod == Method.POST
+        && req.PathParameters["fundId"].ToString() == fundId.ToString()
+        && req.Headers.ContainsKey("Content-Type")
+        && req.Headers["Content-Type"].Contains("application/json")
+);
+
+// Mock PATCH for partial updates
+mockedClient.MockClientResponse(
+    "/api/funds/{id}",
+    patchedFund,
+    req => req.HttpMethod == Method.PATCH
+        && req.PathParameters["id"].ToString() == fundId.ToString()
+);
+```
+
+**When to use:** Testing create, update, or any operation that sends data to the API. Use predicates to verify HTTP method, content type, and other request properties.
+
+**Note:** For deep inspection of request body content, you may need to read and deserialize `req.Content` within your predicate, though this can be complex in unit tests.
+
 ### URL Pattern Matching
 
 The library uses `EndsWith()` matching on URL templates after stripping Kiota's query parameter template placeholders:
@@ -527,6 +628,39 @@ Mocks a no-content (204) response for an endpoint.
 
 **Parameters:**
 - `urlTemplate` (string) - The URL pattern to match
+- `requestInfoPredicate` (optional) - Additional matching conditions
+
+---
+
+### `MockClientResponseException<T, R>()`
+
+Mocks an exception for a single object endpoint.
+
+**Parameters:**
+- `urlTemplate` (string) - The URL pattern to match
+- `exception` (Exception) - The exception to throw
+- `requestInfoPredicate` (optional) - Additional matching conditions
+
+---
+
+### `MockClientCollectionResponseException<T, R>()`
+
+Mocks an exception for a collection endpoint.
+
+**Parameters:**
+- `urlTemplate` (string) - The URL pattern to match
+- `exception` (Exception) - The exception to throw
+- `requestInfoPredicate` (optional) - Additional matching conditions
+
+---
+
+### `MockClientNoContentResponseException<T>()`
+
+Mocks an exception for a no-content endpoint.
+
+**Parameters:**
+- `urlTemplate` (string) - The URL pattern to match
+- `exception` (Exception) - The exception to throw
 - `requestInfoPredicate` (optional) - Additional matching conditions
 
 

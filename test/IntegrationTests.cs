@@ -196,6 +196,65 @@ public class IntegrationTests
         Assert.That(resultActivities, Has.Count.EqualTo(1));
         Assert.That(resultActivities.First().Name, Is.EqualTo("Activity 1"));
     }
+
+    [Test]
+    public void MockClientResponseException_WithNotFoundException_ShouldSetupWithoutError()
+    {
+        // Arrange
+        var client = KiotaClientMockExtensions.GetMockableClient<TestApiClient>();
+        var nonExistentId = Guid.NewGuid();
+        var exception = new ApiException("Fund not found") { ResponseStatusCode = 404 };
+
+        // Act & Assert - verifies mock setup doesn't throw
+        Assert.DoesNotThrow(() =>
+        {
+            client.MockClientResponseException<TestApiClient, FundDto>(
+                "/api/funds/{id}",
+                exception,
+                req => req.PathParameters["id"].ToString() == nonExistentId.ToString()
+            );
+        });
+    }
+
+    [Test]
+    public void MockClientResponse_WithPostMethodPredicate_ShouldSetupWithoutError()
+    {
+        // Arrange
+        var client = KiotaClientMockExtensions.GetMockableClient<TestApiClient>();
+        var newFund = new FundDto { Id = Guid.NewGuid().ToString(), Name = "New Fund" };
+
+        // Act & Assert - verifies POST mock setup doesn't throw
+        Assert.DoesNotThrow(() =>
+        {
+            client.MockClientResponse(
+                "/api/funds",
+                newFund,
+                req => req.HttpMethod == Method.POST && req.Content != null
+            );
+        });
+    }
+
+    [Test]
+    public void MockClientResponse_WithPutMethodPredicate_ShouldSetupWithoutError()
+    {
+        // Arrange
+        var client = KiotaClientMockExtensions.GetMockableClient<TestApiClient>();
+        var existingId = Guid.NewGuid();
+        var updatedFund = new FundDto { Id = existingId.ToString(), Name = "Updated Fund" };
+
+        // Act & Assert - verifies PUT mock setup doesn't throw
+        Assert.DoesNotThrow(() =>
+        {
+            client.MockClientResponse(
+                "/api/funds/{id}",
+                updatedFund,
+                req =>
+                    req.HttpMethod == Method.PUT
+                    && req.PathParameters["id"].ToString() == existingId.ToString()
+                    && req.Content != null
+            );
+        });
+    }
 }
 
 #region Test Client Implementation

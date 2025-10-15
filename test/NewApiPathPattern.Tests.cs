@@ -1,7 +1,4 @@
-using System.Linq.Expressions;
 using Microsoft.Kiota.Abstractions;
-using Microsoft.Kiota.Abstractions.Serialization;
-using NSubstitute;
 
 namespace Gainsway.Kiota.Testing.Tests;
 
@@ -177,11 +174,9 @@ public class NewApiPathPatternTests
         );
 
         _mockClient.MockClientResponse(
-            "/api/funds/{fundId}/activities/{activityId}/modify",
-            activity,
-            req =>
-                req.PathParameters["fundId"].ToString() == fundId.ToString()
-                && req.PathParameters["activityId"].ToString() == activityId.ToString()
+            "/api/funds/{fundId}/activities/{activityId}",
+            123,
+            req => req.PathParameters["activityId"].ToString() == activityId.ToString()
         );
 
         // Assert - Smoke test: All four mock setups completed without exceptions

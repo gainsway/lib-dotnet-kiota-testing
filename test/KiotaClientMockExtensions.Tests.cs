@@ -1,7 +1,5 @@
-using System.Linq.Expressions;
 using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Serialization;
-using NSubstitute;
 
 namespace Gainsway.Kiota.Testing.Tests;
 

@@ -444,61 +444,136 @@ mockedClient.MockClientResponse(
 
 ### URL Pattern Matching
 
-The library uses **exact path matching** on URL templates after normalizing Kiota's URL template format:
+The library uses **positional token matching** on URL templates after normalizing Kiota's URL template format. This provides the perfect balance of flexibility and validation.
 
 **Normalization Process:**
 1. Strips the `{+baseurl}` prefix from Kiota's URL template
 2. Removes query parameter template syntax `{?param1,param2}`
-3. Ensures leading slash for consistent matching
-4. Performs case-insensitive exact match
+3. Replaces path parameters with positional tokens: `{token1}`, `{token2}`, etc.
+4. Ensures leading slash for consistent matching
+5. Performs case-insensitive exact match on the tokenized pattern
 
 **Examples:**
 
 ```csharp
-// Kiota-generated URL template (what's in req.UrlTemplate):
-"{+baseurl}/api/funds/{id}{?expand,select}"
+// Kiota-generated URL template:
+"{+baseurl}/api/funds/{fund-id}{?expand,select}"
 
 // After normalization:
-"/api/funds/{id}"
+"/api/funds/{token1}"
 
-// Your mock URL template:
-"/api/funds/{id}"  // ✅ Exact match
+// Your mock URL template (any parameter name works):
+"/api/funds/{id}"      // ✅ Normalized to "/api/funds/{token1}" - Matches!
+"/api/funds/{fundId}"  // ✅ Normalized to "/api/funds/{token1}" - Matches!
+"/api/funds/{ids}"     // ✅ Normalized to "/api/funds/{token1}" - Matches!
 
-// These also work (leading slash optional):
-"api/funds/{id}"   // ✅ Normalized to "/api/funds/{id}"
-
-// These WON'T match (exact matching):
-"/api/funds"                    // ❌ Different path
-"/api/funds/{id}/activities"   // ❌ Different path
-"funds/{id}"                    // ❌ Missing "/api" prefix
+// These WON'T match (different structure):
+"/api/funds"                    // ❌ Normalized to "/api/funds" - Missing parameter
+"/api/funds/{id}/activities"   // ❌ Normalized to "/api/funds/{token1}/activities" - Extra path segment
+"funds/{id}"                    // ❌ Normalized to "/funds/{token1}" - Missing "/api" prefix
 ```
 
-**Why Exact Matching?**
+**What Positional Tokens Validate:**
 
-Exact matching allows you to mock similar endpoints independently:
+✅ **Parameter Count** - Must have the same number of path parameters:
+```csharp
+"/api/funds/{id}"                              → "/api/funds/{token1}"
+"/api/funds/{fundId}/activities/{activityId}"  → "/api/funds/{token1}/activities/{token2}"
+
+// ❌ These won't match (different parameter counts)
+"/api/funds/{id}" vs "/api/funds/{fundId}/activities/{activityId}"
+```
+
+✅ **Parameter Positions** - Parameters must be in the same locations:
+```csharp
+"/api/funds/{id}/activities"    → "/api/funds/{token1}/activities"
+"/api/funds/activities/{id}"    → "/api/funds/activities/{token1}"
+
+// ❌ These won't match (parameter in different position)
+```
+
+✅ **Path Structure** - The overall URL structure must match:
+```csharp
+"/api/funds/{id}"               → "/api/funds/{token1}"
+"/api/funds/{id}/metadata"      → "/api/funds/{token1}/metadata"
+
+// ❌ Different structure won't match
+```
+
+✅ **Flexible Parameter Naming** - Parameter names don't matter for matching:
+```csharp
+// All of these produce the same pattern: "/api/funds/{token1}"
+"/api/funds/{id}"
+"/api/funds/{fundId}"
+"/api/funds/{fund-id}"
+"/api/funds/{ids}"      // Even typos match structurally!
+
+// The actual parameter name validation happens in your predicate:
+req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+//     ^^^ This tries: fundId, fund-id, fund%2Did, FundId
+```
+
+**Why Positional Token Matching?**
+
+This approach gives you the best of both worlds:
+
+1. **Write natural test code** using camelCase parameter names
+2. **Automatic compatibility** with Kiota's naming conventions (kebab-case, URL-encoded, etc.)
+3. **Structure validation** catches actual errors like missing parameters or wrong paths
+4. **Parameter flexibility** lets you use any naming style in your mocks
+
+**Example:**
 
 ```csharp
-// Mock different endpoints with the same base path
+// Your mock with natural C# naming:
 mockedClient.MockClientResponse(
-    "/api/funds/{id}",           // Matches only GET /api/funds/{id}
+    "/api/funds/{fundId}",  // You use natural camelCase
+    fund,
+    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+);
+
+// Kiota's generated request builder uses kebab-case:
+// "{+baseurl}/api/funds/{fund-id}"
+
+// What happens:
+// 1. Your pattern: "/api/funds/{fundId}" → "/api/funds/{token1}" ✅
+// 2. Kiota's URL:  "/api/funds/{fund-id}" → "/api/funds/{token1}" ✅
+// 3. Pattern matches! Predicate executes.
+// 4. GetPathParameter("fundId") tries: fundId, fund-id, fund%2Did, FundId
+// 5. Finds "fund-id" in PathParameters ✅
+// 6. Returns the value!
+```
+
+**Independent Mock Setup:**
+
+Positional tokens allow you to mock similar endpoints independently:
+
+```csharp
+// Different structures produce different token patterns
+mockedClient.MockClientResponse(
+    "/api/funds/{id}",           // → "/api/funds/{token1}"
     fund
 );
 
 mockedClient.MockClientCollectionResponse(
-    "/api/funds/{id}/activities", // Matches only GET /api/funds/{id}/activities
+    "/api/funds/{id}/activities", // → "/api/funds/{token1}/activities"
     activities
 );
 
 mockedClient.MockClientResponse(
-    "/api/funds/{id}/seeding-metadata", // Matches only GET /api/funds/{id}/seeding-metadata
+    "/api/funds/{id}/metadata",   // → "/api/funds/{token1}/metadata"
     metadata
 );
+
+// Each mock only matches its specific structure
 ```
 
-Each mock will only match its specific endpoint, even when combined with path parameter predicates:
+**Same Pattern, Different Values:**
+
+You can mock the same endpoint multiple times with different predicates:
 
 ```csharp
-// These work independently with different fundIds
+// Both normalize to "/api/funds/{token1}", but predicates differentiate:
 mockedClient.MockClientResponse(
     "/api/funds/{id}",
     fund1,
@@ -512,7 +587,7 @@ mockedClient.MockClientResponse(
 );
 ```
 
-**Note:** The regex pattern `@"\{\?.*?\}"` only removes Kiota's optional parameter syntax, not actual query string values.
+**Note:** Query parameter template syntax `{?param1,param2}` is removed during normalization and doesn't affect pattern matching.
 
 ### Writing Mocks with Natural Parameter Names
 
@@ -774,11 +849,17 @@ mockedClient.MockClientResponse(
 
 ### Why This Approach Works
 
-**URL Pattern Matching:** The library normalizes URL templates by removing Kiota-specific syntax and decoding parameter names:
-- Your pattern: `/api/funds/{fundId}` → normalized to `/api/funds/{fundid}` (lowercase for comparison)
-- Kiota's request: `/api/funds/{fund-id}` → normalized to `/api/funds/{fund-id}`  
-- Kiota's request: `/api/funds/{fund%2Did}` → normalized to `/api/funds/{fund-id}` (URL-decoded)
-- **Result:** Pattern matches if structure is the same (same number and position of parameters)
+**Positional Token Matching:** The library normalizes URL templates using sequential positional tokens:
+- Your pattern: `/api/funds/{fundId}` → normalized to `/api/funds/{token1}`
+- Kiota's request: `/api/funds/{fund-id}` → normalized to `/api/funds/{token1}`
+- Kiota's request: `/api/funds/{fund%2Did}` → normalized to `/api/funds/{token1}` (URL-decoded first)
+- **Result:** Pattern matches because they have the same structure (one parameter in position 1)
+
+This validates:
+- ✅ **Parameter count** - Must have same number of parameters
+- ✅ **Parameter positions** - Parameters must be in same locations  
+- ✅ **Path structure** - Overall URL structure must match
+- ✅ **Flexible naming** - Parameter names don't need to match
 
 **Smart Parameter Access:** The extension methods handle naming variations automatically:
 - You write: `req.GetPathParameter("fundId")`
@@ -793,9 +874,11 @@ mockedClient.MockClientResponse(
 **Benefits:**
 1. **Natural C# Naming**: Write tests using idiomatic camelCase
 2. **Automatic Variation Handling**: Library tries multiple naming conventions
-3. **Clear Error Messages**: Know exactly what went wrong and how to fix it
-4. **Contract Validation**: You still verify parameter values
-5. **Maintainable**: Test code is clear and readable
+3. **Structure Validation**: Catches missing parameters, wrong paths, position mismatches
+4. **Clear Error Messages**: Know exactly what went wrong and how to fix it
+5. **Contract Validation**: You still verify parameter values in predicates
+6. **Maintainable**: Test code is clear and readable
+7. **Typo-Tolerant**: Pattern matching is flexible on parameter names but strict on structure
 
 ---
 

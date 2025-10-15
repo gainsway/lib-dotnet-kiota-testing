@@ -80,11 +80,11 @@ public static class KiotaClientMockExtensions
 
     /// <summary>
     /// Normalizes a Kiota URL template by removing the {+baseurl} prefix, query parameter templates,
-    /// and normalizing URL-encoded parameter names (e.g., {fund%2Did} -> {fund-id}).
-    /// Does NOT convert parameter names to wildcards - preserves the specific parameter names.
+    /// and converting path parameters to positional tokens (token1, token2, etc.).
+    /// This allows patterns to match regardless of parameter naming while preserving position for validation.
     /// </summary>
     /// <param name="urlTemplate">The URL template to normalize.</param>
-    /// <returns>The normalized URL path with preserved parameter names.</returns>
+    /// <returns>The normalized URL path with positional token parameters.</returns>
     private static string NormalizeUrlTemplate(string urlTemplate)
     {
         // Step 1: Remove {+baseurl} prefix if present
@@ -95,19 +95,11 @@ public static class KiotaClientMockExtensions
         // Step 2: Remove query parameter templates like {?param1,param2}
         cleanedUrl = Regex.Replace(cleanedUrl, @"\{\?.*?\}", string.Empty);
 
-        // Step 3: Normalize URL-encoded parameter names
-        // Kiota generates things like {fund%2Did} which should match {fund-id}
-        // We URL-decode the parameter names but keep the structure
-        cleanedUrl = Regex.Replace(
-            cleanedUrl,
-            @"\{([^}]+)\}",
-            match =>
-            {
-                var paramName = match.Groups[1].Value;
-                var decoded = Uri.UnescapeDataString(paramName);
-                return $"{{{decoded}}}";
-            }
-        );
+        // Step 3: Replace path parameters with positional tokens: {token1}, {token2}, etc.
+        // This allows {id}, {fundId}, {fund-id}, {fund%2Did} to all match the same position
+        // but maintains position validation so {fundId}/something/{activityId} matches structure
+        var tokenIndex = 1;
+        cleanedUrl = Regex.Replace(cleanedUrl, @"\{[^}]+\}", match => $"{{token{tokenIndex++}}}");
 
         // Step 4: Ensure leading slash for consistent matching
         if (!cleanedUrl.StartsWith("/"))

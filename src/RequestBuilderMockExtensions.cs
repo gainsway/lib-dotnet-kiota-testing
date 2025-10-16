@@ -460,11 +460,11 @@ public static class RequestBuilderMockExtensions
         RequestInformation req,
         string urlTemplate,
         Dictionary<string, object> pathParameters,
-        Method? expectedMethod = null
+        Method expectedMethod
     )
     {
-        // Check HTTP method if specified
-        if (expectedMethod != null && req.HttpMethod != expectedMethod)
+        // Check HTTP method
+        if (req.HttpMethod != expectedMethod)
         {
             return false;
         }

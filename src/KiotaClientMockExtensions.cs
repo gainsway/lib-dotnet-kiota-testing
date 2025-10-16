@@ -175,15 +175,15 @@ public static class KiotaClientMockExtensions
     /// // Setup mock
     /// var fundId = Guid.NewGuid();
     /// _mockClient.MockClientResponse("/api/funds/{id}", fund);
-    /// 
+    ///
     /// // Perform action
     /// await _service.GetFundAsync(fundId);
-    /// 
+    ///
     /// // Verify the mock was called
     /// var adapter = _mockClient.GetMockAdapter();
     /// await adapter.Received(1).SendAsync&lt;Fund&gt;(
-    ///     Arg.Is&lt;RequestInformation&gt;(req => 
-    ///         req.UrlTemplate.Contains("/api/funds/") 
+    ///     Arg.Is&lt;RequestInformation&gt;(req =>
+    ///         req.UrlTemplate.Contains("/api/funds/")
     ///         &amp;&amp; req.GetPathParameter("id").ToString() == fundId.ToString()
     ///     ),
     ///     Arg.Any&lt;ParsableFactory&lt;Fund&gt;&gt;(),

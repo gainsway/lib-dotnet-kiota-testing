@@ -163,6 +163,66 @@ public static class KiotaClientMockExtensions
     }
 
     /// <summary>
+    /// Gets the underlying mocked IRequestAdapter from a Kiota client for verification purposes.
+    /// This allows you to use NSubstitute's verification methods (.Received(), .DidNotReceive(), etc.)
+    /// to verify that the mock was called with specific parameters.
+    /// </summary>
+    /// <typeparam name="T">The type of the request builder (Kiota client).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated client instance.</param>
+    /// <returns>The mocked IRequestAdapter that can be used for verification.</returns>
+    /// <example>
+    /// <code>
+    /// // Setup mock
+    /// var fundId = Guid.NewGuid();
+    /// _mockClient.MockClientResponse("/api/funds/{id}", fund);
+    /// 
+    /// // Perform action
+    /// await _service.GetFundAsync(fundId);
+    /// 
+    /// // Verify the mock was called
+    /// var adapter = _mockClient.GetMockAdapter();
+    /// await adapter.Received(1).SendAsync&lt;Fund&gt;(
+    ///     Arg.Is&lt;RequestInformation&gt;(req => 
+    ///         req.UrlTemplate.Contains("/api/funds/") 
+    ///         &amp;&amp; req.GetPathParameter("id").ToString() == fundId.ToString()
+    ///     ),
+    ///     Arg.Any&lt;ParsableFactory&lt;Fund&gt;&gt;(),
+    ///     Arg.Any&lt;Dictionary&lt;string, ParsableFactory&lt;IParsable&gt;&gt;&gt;(),
+    ///     Arg.Any&lt;CancellationToken&gt;()
+    /// );
+    /// </code>
+    /// </example>
+    public static IRequestAdapter GetMockAdapter<T>(T requestBuilder)
+        where T : BaseRequestBuilder
+    {
+        // Access the RequestAdapter property from the base class
+        var adapterProperty = typeof(BaseRequestBuilder).GetProperty(
+            "RequestAdapter",
+            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public
+        );
+
+        if (adapterProperty == null)
+        {
+            throw new InvalidOperationException(
+                "Could not find RequestAdapter property on BaseRequestBuilder. "
+                    + "This may indicate a breaking change in Kiota."
+            );
+        }
+
+        var adapter = adapterProperty.GetValue(requestBuilder) as IRequestAdapter;
+
+        if (adapter == null)
+        {
+            throw new InvalidOperationException(
+                $"RequestAdapter is null for request builder of type {typeof(T).Name}. "
+                    + "Ensure the client was created using GetMockableClient<T>()."
+            );
+        }
+
+        return adapter;
+    }
+
+    /// <summary>
     /// Creates a Kiota generated client class that can be mocked.
     /// </summary>
     /// <typeparam name="T"></typeparam>

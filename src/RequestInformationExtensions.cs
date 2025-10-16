@@ -68,7 +68,7 @@ public static class RequestInformationExtensions
     /// </example>
     public static string NormalizeUrlTemplate(this RequestInformation requestInfo)
     {
-        if (string.IsNullOrEmpty(requestInfo?.UrlTemplate))
+        if (requestInfo == null || string.IsNullOrEmpty(requestInfo.UrlTemplate))
         {
             return string.Empty;
         }

@@ -15,6 +15,16 @@ _mockClient.MockClientResponse("/api/fundz/{id}", fund); // Typo! No error until
 // ✅ New API - IDE shows errors immediately
 _fundClient.Api.Funds[fundId].MockGetAsync(fund);
 _fundClient.Api.Fundz[fundId].MockGetAsync(fund); // Compile error: 'Fundz' doesn't exist
+
+// ✅ Type safety - Wrong type causes compile error
+var user = new User { Id = userId };
+_fundClient.Api.Funds[fundId].MockGetAsync(user); 
+// Compile error: Cannot convert User to Fund
+
+// ✅ Type safety for collections too
+var users = new List<User> { user };
+_fundClient.Api.Funds.MockGetCollectionAsync(users);
+// Compile error: Cannot convert List<User> to IEnumerable<Fund>
 ```
 
 ### ✅ IntelliSense Support
@@ -59,14 +69,24 @@ _fundClient.Api.Funds[fundId].Activities[activityId].MockGetAsync(activity);
 // Setup
 var mockClient = KiotaClientMockExtensions.GetMockableClient<MyKiotaClient>();
 
-// Mock GET request returning an object
+// Mock GET request returning a single object
+// ✅ Type-safe: Can only pass Fund, not User or other types
 mockClient.Api.Funds[fundId].MockGetAsync(expectedFund);
 
 // Mock GET request returning a string
 mockClient.Api.Status.MockGetAsync("OK");
 
 // Mock GET request returning a collection
+// ✅ Type-safe: Can only pass IEnumerable<Fund>, not IEnumerable<User>
 var funds = new List<Fund> { fund1, fund2 };
+mockClient.Api.Funds.MockGetCollectionAsync(funds);
+
+// ⚠️ Common mistake: Don't use MockGetAsync for collections!
+// ❌ Wrong - Compile error
+mockClient.Api.Funds.MockGetAsync(funds); 
+// Error: Cannot convert List<Fund> to Fund
+
+// ✅ Correct - Use MockGetCollectionAsync
 mockClient.Api.Funds.MockGetCollectionAsync(funds);
 
 // Mock POST request

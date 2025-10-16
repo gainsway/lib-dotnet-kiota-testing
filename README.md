@@ -449,7 +449,7 @@ The library uses **positional token matching** on URL templates after normalizin
 **Normalization Process:**
 1. Strips the `{+baseurl}` prefix from Kiota's URL template
 2. Removes query parameter template syntax `{?param1,param2}`
-3. Replaces path parameters with positional tokens: `{token1}`, `{token2}`, etc.
+3. Replaces path parameters with positional tokens: `{pathParam1}`, `{pathParam2}`, etc.
 4. Ensures leading slash for consistent matching
 5. Performs case-insensitive exact match on the tokenized pattern
 
@@ -460,25 +460,25 @@ The library uses **positional token matching** on URL templates after normalizin
 "{+baseurl}/api/funds/{fund-id}{?expand,select}"
 
 // After normalization:
-"/api/funds/{token1}"
+"/api/funds/{pathParam1}"
 
 // Your mock URL template (any parameter name works):
-"/api/funds/{id}"      // ✅ Normalized to "/api/funds/{token1}" - Matches!
-"/api/funds/{fundId}"  // ✅ Normalized to "/api/funds/{token1}" - Matches!
-"/api/funds/{ids}"     // ✅ Normalized to "/api/funds/{token1}" - Matches!
+"/api/funds/{id}"      // ✅ Normalized to "/api/funds/{pathParam1}" - Matches!
+"/api/funds/{fundId}"  // ✅ Normalized to "/api/funds/{pathParam1}" - Matches!
+"/api/funds/{ids}"     // ✅ Normalized to "/api/funds/{pathParam1}" - Matches!
 
 // These WON'T match (different structure):
 "/api/funds"                    // ❌ Normalized to "/api/funds" - Missing parameter
-"/api/funds/{id}/activities"   // ❌ Normalized to "/api/funds/{token1}/activities" - Extra path segment
-"funds/{id}"                    // ❌ Normalized to "/funds/{token1}" - Missing "/api" prefix
+"/api/funds/{id}/activities"   // ❌ Normalized to "/api/funds/{pathParam1}/activities" - Extra path segment
+"funds/{id}"                    // ❌ Normalized to "/funds/{pathParam1}" - Missing "/api" prefix
 ```
 
 **What Positional Tokens Validate:**
 
 ✅ **Parameter Count** - Must have the same number of path parameters:
 ```csharp
-"/api/funds/{id}"                              → "/api/funds/{token1}"
-"/api/funds/{fundId}/activities/{activityId}"  → "/api/funds/{token1}/activities/{token2}"
+"/api/funds/{id}"                              → "/api/funds/{pathParam1}"
+"/api/funds/{fundId}/activities/{activityId}"  → "/api/funds/{pathParam1}/activities/{pathParam2}"
 
 // ❌ These won't match (different parameter counts)
 "/api/funds/{id}" vs "/api/funds/{fundId}/activities/{activityId}"
@@ -486,23 +486,23 @@ The library uses **positional token matching** on URL templates after normalizin
 
 ✅ **Parameter Positions** - Parameters must be in the same locations:
 ```csharp
-"/api/funds/{id}/activities"    → "/api/funds/{token1}/activities"
-"/api/funds/activities/{id}"    → "/api/funds/activities/{token1}"
+"/api/funds/{id}/activities"    → "/api/funds/{pathParam1}/activities"
+"/api/funds/activities/{id}"    → "/api/funds/activities/{pathParam1}"
 
 // ❌ These won't match (parameter in different position)
 ```
 
 ✅ **Path Structure** - The overall URL structure must match:
 ```csharp
-"/api/funds/{id}"               → "/api/funds/{token1}"
-"/api/funds/{id}/metadata"      → "/api/funds/{token1}/metadata"
+"/api/funds/{id}"               → "/api/funds/{pathParam1}"
+"/api/funds/{id}/metadata"      → "/api/funds/{pathParam1}/metadata"
 
 // ❌ Different structure won't match
 ```
 
 ✅ **Flexible Parameter Naming** - Parameter names don't matter for matching:
 ```csharp
-// All of these produce the same pattern: "/api/funds/{token1}"
+// All of these produce the same pattern: "/api/funds/{pathParam1}"
 "/api/funds/{id}"
 "/api/funds/{fundId}"
 "/api/funds/{fund-id}"
@@ -536,8 +536,8 @@ mockedClient.MockClientResponse(
 // "{+baseurl}/api/funds/{fund-id}"
 
 // What happens:
-// 1. Your pattern: "/api/funds/{fundId}" → "/api/funds/{token1}" ✅
-// 2. Kiota's URL:  "/api/funds/{fund-id}" → "/api/funds/{token1}" ✅
+// 1. Your pattern: "/api/funds/{fundId}" → "/api/funds/{pathParam1}" ✅
+// 2. Kiota's URL:  "/api/funds/{fund-id}" → "/api/funds/{pathParam1}" ✅
 // 3. Pattern matches! Predicate executes.
 // 4. GetPathParameter("fundId") tries: fundId, fund-id, fund%2Did, FundId
 // 5. Finds "fund-id" in PathParameters ✅
@@ -551,17 +551,17 @@ Positional tokens allow you to mock similar endpoints independently:
 ```csharp
 // Different structures produce different token patterns
 mockedClient.MockClientResponse(
-    "/api/funds/{id}",           // → "/api/funds/{token1}"
+    "/api/funds/{id}",           // → "/api/funds/{pathParam1}"
     fund
 );
 
 mockedClient.MockClientCollectionResponse(
-    "/api/funds/{id}/activities", // → "/api/funds/{token1}/activities"
+    "/api/funds/{id}/activities", // → "/api/funds/{pathParam1}/activities"
     activities
 );
 
 mockedClient.MockClientResponse(
-    "/api/funds/{id}/metadata",   // → "/api/funds/{token1}/metadata"
+    "/api/funds/{id}/metadata",   // → "/api/funds/{pathParam1}/metadata"
     metadata
 );
 
@@ -573,7 +573,7 @@ mockedClient.MockClientResponse(
 You can mock the same endpoint multiple times with different predicates:
 
 ```csharp
-// Both normalize to "/api/funds/{token1}", but predicates differentiate:
+// Both normalize to "/api/funds/{pathParam1}", but predicates differentiate:
 mockedClient.MockClientResponse(
     "/api/funds/{id}",
     fund1,
@@ -850,9 +850,9 @@ mockedClient.MockClientResponse(
 ### Why This Approach Works
 
 **Positional Token Matching:** The library normalizes URL templates using sequential positional tokens:
-- Your pattern: `/api/funds/{fundId}` → normalized to `/api/funds/{token1}`
-- Kiota's request: `/api/funds/{fund-id}` → normalized to `/api/funds/{token1}`
-- Kiota's request: `/api/funds/{fund%2Did}` → normalized to `/api/funds/{token1}` (URL-decoded first)
+- Your pattern: `/api/funds/{fundId}` → normalized to `/api/funds/{pathParam1}`
+- Kiota's request: `/api/funds/{fund-id}` → normalized to `/api/funds/{pathParam1}`
+- Kiota's request: `/api/funds/{fund%2Did}` → normalized to `/api/funds/{pathParam1}` (URL-decoded first)
 - **Result:** Pattern matches because they have the same structure (one parameter in position 1)
 
 This validates:

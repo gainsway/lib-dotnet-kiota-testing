@@ -79,27 +79,63 @@ public static class KiotaClientMockExtensions
     }
 
     /// <summary>
-    /// Normalizes a Kiota URL template by removing the {+baseurl} prefix, query parameter templates,
-    /// and converting path parameters to positional tokens (token1, token2, etc.).
+    /// Normalizes a Kiota URL template by removing the {+baseurl} prefix and converting parameters to positional names.
+    /// Path parameters become {pathParam1}, {pathParam2}, etc.
+    /// Query parameters become {?queryParam1,queryParam2} etc.
     /// This allows patterns to match regardless of parameter naming while preserving position for validation.
     /// </summary>
     /// <param name="urlTemplate">The URL template to normalize.</param>
-    /// <returns>The normalized URL path with positional token parameters.</returns>
-    private static string NormalizeUrlTemplate(string urlTemplate)
+    /// <returns>The normalized URL template with positional parameter names.</returns>
+    /// <remarks>
+    /// This method is useful for verification scenarios where you want to validate the URL structure
+    /// and parameter positions without worrying about exact parameter names.
+    ///
+    /// Examples:
+    /// - "/api/funds/{fundId}" becomes "/api/funds/{pathParam1}"
+    /// - "/api/fundapplications/{id}/submissions/{version}/review" becomes "/api/fundapplications/{pathParam1}/submissions/{pathParam2}/review"
+    /// - "/api/items{?select,expand,filter}" becomes "/api/items{?queryParam1,queryParam2,queryParam3}"
+    /// - "{+baseurl}/api/funds/{fund-id}{?select}" becomes "/api/funds/{pathParam1}{?queryParam1}"
+    ///
+    /// Use this in verification predicates:
+    /// <code>
+    /// var normalized = req.NormalizeUrlTemplate();
+    /// Assert.That(normalized, Is.EqualTo("/api/funds/{pathParam1}/activities/{pathParam2}"));
+    ///
+    /// // Verify path parameters by position
+    /// Assert.That(req.PathParameters.Values.ElementAt(0).ToString(), Is.EqualTo(fundId.ToString()));
+    /// Assert.That(req.PathParameters.Values.ElementAt(1).ToString(), Is.EqualTo(activityId.ToString()));
+    /// </code>
+    /// </remarks>
+    public static string NormalizeUrlTemplate(string urlTemplate)
     {
         // Step 1: Remove {+baseurl} prefix if present
         var cleanedUrl = urlTemplate.StartsWith("{+baseurl}")
             ? urlTemplate.Substring("{+baseurl}".Length)
             : urlTemplate;
 
-        // Step 2: Remove query parameter templates like {?param1,param2}
-        cleanedUrl = Regex.Replace(cleanedUrl, @"\{\?.*?\}", string.Empty);
+        // Step 2: Normalize query parameters {?param1,param2} to {?queryParam1,queryParam2}
+        cleanedUrl = Regex.Replace(
+            cleanedUrl,
+            @"\{\?([^}]+)\}",
+            match =>
+            {
+                var queryParams = match.Groups[1].Value.Split(',');
+                var normalizedParams = queryParams
+                    .Select((_, index) => $"queryParam{index + 1}")
+                    .ToArray();
+                return $"{{?{string.Join(",", normalizedParams)}}}";
+            }
+        );
 
-        // Step 3: Replace path parameters with positional tokens: {token1}, {token2}, etc.
+        // Step 3: Replace path parameters with positional names: {pathParam1}, {pathParam2}, etc.
         // This allows {id}, {fundId}, {fund-id}, {fund%2Did} to all match the same position
         // but maintains position validation so {fundId}/something/{activityId} matches structure
-        var tokenIndex = 1;
-        cleanedUrl = Regex.Replace(cleanedUrl, @"\{[^}]+\}", match => $"{{token{tokenIndex++}}}");
+        var pathParamIndex = 1;
+        cleanedUrl = Regex.Replace(
+            cleanedUrl,
+            @"\{([^?}][^}]*)\}",
+            match => $"{{pathParam{pathParamIndex++}}}"
+        );
 
         // Step 4: Ensure leading slash for consistent matching
         if (!cleanedUrl.StartsWith("/"))
@@ -182,14 +218,41 @@ public static class KiotaClientMockExtensions
     /// // Perform action
     /// await _service.GetFundAsync(fundId);
     ///
-    /// // Verify the mock was called (works with root client or any request builder)
+    /// // Verify the mock was called with correct HTTP method and URL structure
     /// var adapter = _mockClient.GetMockAdapter();
     /// await adapter.Received(1).SendAsync&lt;Fund&gt;(
     ///     Arg.Is&lt;RequestInformation&gt;(req =>
-    ///         req.UrlTemplate.Contains("/api/funds/")
-    ///         &amp;&amp; req.GetPathParameter("id").ToString() == fundId.ToString()
+    ///         req.HttpMethod == Method.GET
+    ///         &amp;&amp; req.NormalizeUrlTemplate() == "/api/funds/{pathParam1}"
+    ///         &amp;&amp; req.PathParameters.Values.ElementAt(0).ToString() == fundId.ToString()
     ///     ),
     ///     Arg.Any&lt;ParsableFactory&lt;Fund&gt;&gt;(),
+    ///     Arg.Any&lt;Dictionary&lt;string, ParsableFactory&lt;IParsable&gt;&gt;&gt;(),
+    ///     Arg.Any&lt;CancellationToken&gt;()
+    /// );
+    ///
+    /// // Example with multiple path parameters
+    /// await adapter.Received(1).SendAsync&lt;FundApplicationDto&gt;(
+    ///     Arg.Is&lt;RequestInformation&gt;(req =>
+    ///         req.HttpMethod == Method.POST
+    ///         &amp;&amp; req.NormalizeUrlTemplate() == "/api/fundapplications/{pathParam1}/submissions/{pathParam2}/review"
+    ///         &amp;&amp; req.PathParameters.Values.ElementAt(0).ToString() == applicationId.ToString()
+    ///         &amp;&amp; req.PathParameters.Values.ElementAt(1).ToString() == versionNumber.ToString()
+    ///     ),
+    ///     Arg.Any&lt;ParsableFactory&lt;FundApplicationDto&gt;&gt;(),
+    ///     Arg.Any&lt;Dictionary&lt;string, ParsableFactory&lt;IParsable&gt;&gt;&gt;(),
+    ///     Arg.Any&lt;CancellationToken&gt;()
+    /// );
+    ///
+    /// // Example with query parameters
+    /// await adapter.Received(1).SendAsync&lt;FundCollectionResponse&gt;(
+    ///     Arg.Is&lt;RequestInformation&gt;(req =>
+    ///         req.HttpMethod == Method.GET
+    ///         &amp;&amp; req.NormalizeUrlTemplate() == "/api/funds{?queryParam1,queryParam2}"
+    ///         &amp;&amp; req.QueryParameters.ContainsKey("$select")
+    ///         &amp;&amp; req.QueryParameters.ContainsKey("$filter")
+    ///     ),
+    ///     Arg.Any&lt;ParsableFactory&lt;FundCollectionResponse&gt;&gt;(),
     ///     Arg.Any&lt;Dictionary&lt;string, ParsableFactory&lt;IParsable&gt;&gt;&gt;(),
     ///     Arg.Any&lt;CancellationToken&gt;()
     /// );

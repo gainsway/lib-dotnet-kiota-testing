@@ -51,6 +51,32 @@ public static class RequestInformationExtensions
     }
 
     /// <summary>
+    /// Normalizes the URL template of a RequestInformation by converting path parameters to positional arguments.
+    /// Returns a template like "/api/funds/{arg1}/activities/{arg2}" for easy verification.
+    /// </summary>
+    /// <param name="requestInfo">The request information object.</param>
+    /// <returns>The normalized URL template with {arg1}, {arg2}, etc. placeholders.</returns>
+    /// <example>
+    /// <code>
+    /// // In verification predicates:
+    /// Arg.Is&lt;RequestInformation&gt;(req =>
+    ///     req.NormalizeUrlTemplate() == "/api/fundapplications/{arg1}/submissions/{arg2}/review"
+    ///     &amp;&amp; req.PathParameters.Values.ElementAt(0).ToString() == fundApplicationId.ToString()
+    ///     &amp;&amp; req.PathParameters.Values.ElementAt(1).ToString() == submissionVersionNumber.ToString()
+    /// )
+    /// </code>
+    /// </example>
+    public static string NormalizeUrlTemplate(this RequestInformation requestInfo)
+    {
+        if (string.IsNullOrEmpty(requestInfo?.UrlTemplate))
+        {
+            return string.Empty;
+        }
+
+        return KiotaClientMockExtensions.NormalizeUrlTemplate(requestInfo.UrlTemplate);
+    }
+
+    /// <summary>
     /// Tries to get a path parameter value from the RequestInformation, attempting multiple naming conventions.
     /// Tries: original name, kebab-case, URL-encoded kebab-case, PascalCase.
     /// </summary>

@@ -256,7 +256,7 @@ public class RequestInformationExtensionsTests
         RequestInformation? requestInfo = null;
 
         // Act
-        var normalized = requestInfo!.NormalizeUrlTemplate();
+        var normalized = RequestInformationExtensions.NormalizeUrlTemplate(requestInfo);
 
         // Assert
         Assert.That(normalized, Is.EqualTo(string.Empty));

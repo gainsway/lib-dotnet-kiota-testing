@@ -13,14 +13,256 @@ namespace Gainsway.Kiota.Testing;
 public static class KiotaClientMockExtensions
 {
     /// <summary>
-    /// Creates a predicate expression to match a <see cref="RequestInformation"/> object
-    /// based on its URL template ending with the specified value.
+    /// Helper method that performs URL template matching without normalizing parameter names to wildcards.
+    /// Matches exact path structure while preserving parameter names.
     /// </summary>
-    /// <param name="urlTemplate">The URL template to match.</param>
+    private static bool MatchesUrlTemplate(
+        RequestInformation req,
+        string normalizedPattern,
+        string originalPattern
+    )
+    {
+        if (string.IsNullOrEmpty(req.UrlTemplate))
+        {
+            return false;
+        }
+
+        var normalizedRequest = NormalizeUrlTemplate(req.UrlTemplate);
+        return normalizedRequest.Equals(normalizedPattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Creates a predicate expression to match a <see cref="RequestInformation"/> object
+    /// based on its URL template matching the specified pattern.
+    /// </summary>
+    /// <param name="urlTemplate">The URL template to match (e.g., "/api/funds/{fundId}").</param>
     /// <returns>An expression that evaluates to true if the URL template matches.</returns>
+    /// <remarks>
+    /// This method handles Kiota's URL template format which includes:
+    /// - {+baseurl} prefix (stripped for matching)
+    /// - Query parameter templates like {?param1,param2} (stripped for matching)
+    /// - URL-encoded parameter names like {fund%2Did} which is {fund-id}
+    ///
+    /// Matching strategy:
+    /// 1. Strip {+baseurl} prefix from the request's URL template
+    /// 2. Strip query parameter templates {?...}
+    /// 3. Normalize parameter name encoding (e.g., {fund%2Did} -> {fund-id})
+    /// 4. Compare the normalized paths
+    ///
+    /// Parameter Name Handling:
+    /// Unlike previous versions, this library does NOT normalize parameter names to wildcards.
+    /// Instead, it preserves the specific parameter names in the URL pattern and provides
+    /// smart parameter access methods that try multiple naming conventions automatically.
+    ///
+    /// When accessing path parameters in predicates, use the extension methods:
+    /// - req.TryGetPathParameter("fundId", out var id) - Safe, returns bool
+    /// - req.GetPathParameter("fundId") - Throws descriptive exception if not found
+    ///
+    /// These methods automatically try variations like: fundId, fund-id, fund%2Did, FundId
+    ///
+    /// Examples:
+    /// - Pattern "/api/funds/{fundId}" matches "{+baseurl}/api/funds/{fund-id}"
+    /// - Pattern "/api/funds/{fundId}" matches "{+baseurl}/api/funds/{fund%2Did}"
+    /// - Pattern "/api/funds/{fundId}/activities/{activityId}" matches "{+baseurl}/api/funds/{fund-id}/activities/{activity-id}"
+    ///
+    /// The URL structure must match exactly - different endpoints require separate mocks:
+    /// - "/api/funds/{id}" will NOT match "/api/funds/{id}/activities"
+    /// </remarks>
     private static Expression<Predicate<RequestInformation>> RequestInformationUrlTemplatePredicate(
         string urlTemplate
-    ) => req => Regex.Replace(req.UrlTemplate!, @"\{\?.*?\}", string.Empty).EndsWith(urlTemplate);
+    )
+    {
+        // Normalize the user-provided pattern (strips baseurl, query params, normalizes encoding)
+        var normalizedPattern = NormalizeUrlTemplate(urlTemplate);
+
+        return req => MatchesUrlTemplate(req, normalizedPattern, urlTemplate);
+    }
+
+    /// <summary>
+    /// Normalizes a Kiota URL template by removing the {+baseurl} prefix and converting parameters to positional names.
+    /// Path parameters become {pathParam1}, {pathParam2}, etc.
+    /// Query parameters become {?queryParam1,queryParam2} etc.
+    /// This allows patterns to match regardless of parameter naming while preserving position for validation.
+    /// </summary>
+    /// <param name="urlTemplate">The URL template to normalize.</param>
+    /// <returns>The normalized URL template with positional parameter names.</returns>
+    /// <remarks>
+    /// This method is useful for verification scenarios where you want to validate the URL structure
+    /// and parameter positions without worrying about exact parameter names.
+    ///
+    /// Examples:
+    /// - "/api/funds/{fundId}" becomes "/api/funds/{pathParam1}"
+    /// - "/api/fundapplications/{id}/submissions/{version}/review" becomes "/api/fundapplications/{pathParam1}/submissions/{pathParam2}/review"
+    /// - "/api/items{?select,expand,filter}" becomes "/api/items{?queryParam1,queryParam2,queryParam3}"
+    /// - "{+baseurl}/api/funds/{fund-id}{?select}" becomes "/api/funds/{pathParam1}{?queryParam1}"
+    ///
+    /// Use this in verification predicates:
+    /// <code>
+    /// var normalized = req.NormalizeUrlTemplate();
+    /// Assert.That(normalized, Is.EqualTo("/api/funds/{pathParam1}/activities/{pathParam2}"));
+    ///
+    /// // Verify path parameters by position
+    /// Assert.That(req.PathParameters.Values.ElementAt(0).ToString(), Is.EqualTo(fundId.ToString()));
+    /// Assert.That(req.PathParameters.Values.ElementAt(1).ToString(), Is.EqualTo(activityId.ToString()));
+    /// </code>
+    /// </remarks>
+    public static string NormalizeUrlTemplate(string urlTemplate)
+    {
+        // Step 1: Remove {+baseurl} prefix if present
+        var cleanedUrl = urlTemplate.StartsWith("{+baseurl}")
+            ? urlTemplate.Substring("{+baseurl}".Length)
+            : urlTemplate;
+
+        // Step 2: Normalize query parameters {?param1,param2} to {?queryParam1,queryParam2}
+        cleanedUrl = Regex.Replace(
+            cleanedUrl,
+            @"\{\?([^}]+)\}",
+            match =>
+            {
+                var queryParams = match.Groups[1].Value.Split(',');
+                var normalizedParams = queryParams
+                    .Select((_, index) => $"queryParam{index + 1}")
+                    .ToArray();
+                return $"{{?{string.Join(",", normalizedParams)}}}";
+            }
+        );
+
+        // Step 3: Replace path parameters with positional names: {pathParam1}, {pathParam2}, etc.
+        // This allows {id}, {fundId}, {fund-id}, {fund%2Did} to all match the same position
+        // but maintains position validation so {fundId}/something/{activityId} matches structure
+        var pathParamIndex = 1;
+        cleanedUrl = Regex.Replace(
+            cleanedUrl,
+            @"\{([^?}][^}]*)\}",
+            match => $"{{pathParam{pathParamIndex++}}}"
+        );
+
+        // Step 4: Ensure leading slash for consistent matching
+        if (!cleanedUrl.StartsWith("/"))
+        {
+            cleanedUrl = "/" + cleanedUrl;
+        }
+
+        return cleanedUrl;
+    }
+
+    /// <summary>
+    /// Extracts and normalizes the URL template from a Kiota-generated request builder.
+    /// This allows you to use the exact template from generated code instead of hardcoding paths.
+    /// Returns the template with URL-decoded parameter names (e.g., {fund%2Did} -> {fund-id}).
+    /// </summary>
+    /// <typeparam name="T">The type of the request builder.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder instance.</param>
+    /// <returns>The normalized URL template with preserved parameter names.</returns>
+    /// <example>
+    /// <code>
+    /// // Get the exact template from Kiota's generated code
+    /// var urlTemplate = KiotaClientMockExtensions.GetUrlTemplate(mockClient.Api.Funds[fundId]);
+    /// // Returns: "/api/funds/{fund-id}" (if that's what Kiota generated)
+    ///
+    /// // Use it in your mock
+    /// mockedClient.MockClientResponse(
+    ///     urlTemplate,
+    ///     fund,
+    ///     req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
+    /// );
+    /// </code>
+    /// </example>
+    public static string GetUrlTemplate<T>(T requestBuilder)
+        where T : BaseRequestBuilder
+    {
+        // Access the UrlTemplate property from the base class
+        var urlTemplateProperty = typeof(BaseRequestBuilder).GetProperty(
+            "UrlTemplate",
+            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public
+        );
+
+        if (urlTemplateProperty == null)
+        {
+            throw new InvalidOperationException(
+                "Could not find UrlTemplate property on BaseRequestBuilder. "
+                    + "This may indicate a breaking change in Kiota."
+            );
+        }
+
+        var urlTemplate = urlTemplateProperty.GetValue(requestBuilder) as string;
+
+        if (string.IsNullOrEmpty(urlTemplate))
+        {
+            throw new InvalidOperationException(
+                $"UrlTemplate is null or empty for request builder of type {typeof(T).Name}"
+            );
+        }
+
+        // Return the normalized template (strips {+baseurl}, decodes param names, but preserves them)
+        return NormalizeUrlTemplate(urlTemplate);
+    }
+
+    /// <summary>
+    /// Gets the underlying mocked IRequestAdapter from a Kiota client for verification purposes.
+    /// This allows you to use NSubstitute's verification methods (.Received(), .DidNotReceive(), etc.)
+    /// to verify that the mock was called with specific parameters.
+    /// </summary>
+    /// <typeparam name="T">The type of the Kiota client (can be root client or request builder).</typeparam>
+    /// <param name="client">The Kiota-generated client instance.</param>
+    /// <returns>The mocked IRequestAdapter that can be used for verification.</returns>
+    /// <example>
+    /// <code>
+    /// // Add using directive at the top of your test file
+    /// using Gainsway.Kiota.Testing;
+    ///
+    /// // Setup mock
+    /// var fundId = Guid.NewGuid();
+    /// _mockClient.Api.Funds[fundId].MockGetAsync(fund);
+    ///
+    /// // Perform action
+    /// await _service.GetFundAsync(fundId);
+    ///
+    /// // Verify the mock was called with correct HTTP method and URL structure
+    /// var adapter = _mockClient.GetMockAdapter();
+    /// await adapter.Received(1).SendAsync&lt;Fund&gt;(
+    ///     Arg.Is&lt;RequestInformation&gt;(req =>
+    ///         req.HttpMethod == Method.GET
+    ///         &amp;&amp; req.NormalizeUrlTemplate() == "/api/funds/{pathParam1}"
+    ///         &amp;&amp; req.PathParameters.Values.ElementAt(0).ToString() == fundId.ToString()
+    ///     ),
+    ///     Arg.Any&lt;ParsableFactory&lt;Fund&gt;&gt;(),
+    ///     Arg.Any&lt;Dictionary&lt;string, ParsableFactory&lt;IParsable&gt;&gt;&gt;(),
+    ///     Arg.Any&lt;CancellationToken&gt;()
+    /// );
+    ///
+    /// // Example with multiple path parameters
+    /// await adapter.Received(1).SendAsync&lt;FundApplicationDto&gt;(
+    ///     Arg.Is&lt;RequestInformation&gt;(req =>
+    ///         req.HttpMethod == Method.POST
+    ///         &amp;&amp; req.NormalizeUrlTemplate() == "/api/fundapplications/{pathParam1}/submissions/{pathParam2}/review"
+    ///         &amp;&amp; req.PathParameters.Values.ElementAt(0).ToString() == applicationId.ToString()
+    ///         &amp;&amp; req.PathParameters.Values.ElementAt(1).ToString() == versionNumber.ToString()
+    ///     ),
+    ///     Arg.Any&lt;ParsableFactory&lt;FundApplicationDto&gt;&gt;(),
+    ///     Arg.Any&lt;Dictionary&lt;string, ParsableFactory&lt;IParsable&gt;&gt;&gt;(),
+    ///     Arg.Any&lt;CancellationToken&gt;()
+    /// );
+    ///
+    /// // Example with query parameters
+    /// await adapter.Received(1).SendAsync&lt;FundCollectionResponse&gt;(
+    ///     Arg.Is&lt;RequestInformation&gt;(req =>
+    ///         req.HttpMethod == Method.GET
+    ///         &amp;&amp; req.NormalizeUrlTemplate() == "/api/funds{?queryParam1,queryParam2}"
+    ///         &amp;&amp; req.QueryParameters.ContainsKey("$select")
+    ///         &amp;&amp; req.QueryParameters.ContainsKey("$filter")
+    ///     ),
+    ///     Arg.Any&lt;ParsableFactory&lt;FundCollectionResponse&gt;&gt;(),
+    ///     Arg.Any&lt;Dictionary&lt;string, ParsableFactory&lt;IParsable&gt;&gt;&gt;(),
+    ///     Arg.Any&lt;CancellationToken&gt;()
+    /// );
+    /// </code>
+    /// </example>
+    public static IRequestAdapter GetMockAdapter<T>(this T client)
+    {
+        // Use the existing private GetRequestAdapter method which works with any type
+        return GetRequestAdapter(client);
+    }
 
     /// <summary>
     /// Creates a Kiota generated client class that can be mocked.

@@ -16,10 +16,7 @@ public static class KiotaClientMockExtensions
     /// Helper method that performs URL template matching without normalizing parameter names to wildcards.
     /// Matches exact path structure while preserving parameter names.
     /// </summary>
-    private static bool MatchesUrlTemplate(
-        RequestInformation req,
-        string normalizedPattern
-    )
+    private static bool MatchesUrlTemplate(RequestInformation req, string normalizedPattern)
     {
         if (string.IsNullOrEmpty(req.UrlTemplate))
         {

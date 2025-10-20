@@ -1273,4 +1273,209 @@ mockedClient.MockClientResponse(
 
 **Note:** `GetUrlTemplate()` returns wildcards for parameters (`{*}`), which is useful for the URL pattern. However, you still need to know the exact parameter key names (from generated code) for your predicates.
 
+---
+
+## 🔧 Advanced: Manual Mocking Without Extensions
+
+In some cases, you may need to mock directly using the adapter when:
+- You need to accept **any value** for a path parameter (like `Arg.Any<string>()`)
+- An extension method for your specific scenario doesn't exist yet
+- You need very specific predicate logic
+
+### Use Case: Accepting Any Path Parameter Value
+
+**Problem:** You have a dynamically generated path parameter (e.g., account seed) that you can't predict in your test:
+
+```csharp
+// ❌ This won't work - you don't know the accountSeed value beforehand
+var accountSeed = CryptoUtilities.GenerateSeed(/* unpredictable values */);
+_client.Api.Accounts[accountSeed].PublicKey.MockGetAsync("mockedKey");
+```
+
+**Solution:** Mock at the adapter level to match **any** path parameter value:
+
+```csharp
+// ✅ Get the mock adapter
+var adapter = _solanaAdapterServiceClient.GetMockAdapter();
+
+// Mock to accept ANY account seed value
+adapter
+    .SendPrimitiveAsync<string>(
+        Arg.Is<RequestInformation>(req =>
+            req.HttpMethod == Method.GET
+            && req.UrlTemplate == "{+baseurl}/api/accounts/{accountSeed}/public-key"
+            // Note: We're NOT checking the accountSeed value - this accepts any value
+        ),
+        Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+        Arg.Any<CancellationToken>()
+    )
+    .Returns("mockedSolanaPublicKey");
+```
+
+### Manual Mocking Pattern
+
+Use this pattern when you need full control:
+
+```csharp
+// 1. Get the mock adapter from your client
+var adapter = _yourClient.GetMockAdapter();
+
+// 2. Choose the appropriate Send method based on return type:
+//    - SendAsync<T>                 → Single object (IParsable)
+//    - SendPrimitiveAsync<T>        → Primitives (string, int, etc.)
+//    - SendCollectionAsync<T>       → Collections of IParsable
+//    - SendNoContentAsync           → No return value (void/Task)
+
+// 3. Set up the mock with predicates
+adapter
+    .SendPrimitiveAsync<string>(  // Or SendAsync, SendCollectionAsync, etc.
+        Arg.Is<RequestInformation>(req =>
+            // Match on HTTP method
+            req.HttpMethod == Method.GET
+            
+            // Match on exact URL template (get from generated code)
+            && req.UrlTemplate == "{+baseurl}/api/your/path/{param}"
+            
+            // Optional: Check specific path parameters if needed
+            && req.PathParameters.ContainsKey("param")
+            
+            // Optional: Add any other conditions
+            && req.Headers.ContainsKey("Authorization")
+        ),
+        Arg.Any<ParsableFactory<YourType>>(),  // Use appropriate factory type
+        Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+        Arg.Any<CancellationToken>()
+    )
+    .Returns(yourMockedValue);  // Or .Throws(exception) for error cases
+```
+
+### Examples
+
+#### Mock GET Request Returning Object (Any ID)
+
+```csharp
+var adapter = _client.GetMockAdapter();
+
+adapter
+    .SendAsync<Fund>(
+        Arg.Is<RequestInformation>(req =>
+            req.HttpMethod == Method.GET
+            && req.UrlTemplate == "{+baseurl}/api/funds/{fundId}"
+            // Accepts any fundId value
+        ),
+        Arg.Any<ParsableFactory<Fund>>(),
+        Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+        Arg.Any<CancellationToken>()
+    )
+    .Returns(expectedFund);
+```
+
+#### Mock GET Request Returning Collection (Any ID)
+
+```csharp
+var adapter = _client.GetMockAdapter();
+
+adapter
+    .SendCollectionAsync<Activity>(
+        Arg.Is<RequestInformation>(req =>
+            req.HttpMethod == Method.GET
+            && req.UrlTemplate == "{+baseurl}/api/funds/{fundId}/activities"
+        ),
+        Arg.Any<ParsableFactory<Activity>>(),
+        Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+        Arg.Any<CancellationToken>()
+    )
+    .Returns(expectedActivities);
+```
+
+#### Mock POST Request with Body Validation
+
+```csharp
+var adapter = _client.GetMockAdapter();
+
+adapter
+    .SendAsync<Fund>(
+        Arg.Is<RequestInformation>(req =>
+            req.HttpMethod == Method.POST
+            && req.UrlTemplate == "{+baseurl}/api/funds"
+            && req.Content != null  // Ensure body is present
+        ),
+        Arg.Any<ParsableFactory<Fund>>(),
+        Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+        Arg.Any<CancellationToken>()
+    )
+    .Returns(createdFund);
+```
+
+#### Mock DELETE Request (No Return Value)
+
+```csharp
+var adapter = _client.GetMockAdapter();
+
+adapter
+    .SendNoContentAsync(
+        Arg.Is<RequestInformation>(req =>
+            req.HttpMethod == Method.DELETE
+            && req.UrlTemplate == "{+baseurl}/api/funds/{fundId}"
+        ),
+        Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+        Arg.Any<CancellationToken>()
+    )
+    .Returns(Task.CompletedTask);
+```
+
+#### Mock Request That Throws Exception
+
+```csharp
+var adapter = _client.GetMockAdapter();
+
+adapter
+    .SendAsync<Fund>(
+        Arg.Is<RequestInformation>(req =>
+            req.HttpMethod == Method.GET
+            && req.UrlTemplate == "{+baseurl}/api/funds/{fundId}"
+        ),
+        Arg.Any<ParsableFactory<Fund>>(),
+        Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+        Arg.Any<CancellationToken>()
+    )
+    .Throws(new ApiException("Not Found") { ResponseStatusCode = 404 });
+```
+
+### Finding the Correct URL Template
+
+To find the exact URL template for manual mocking:
+
+1. **Check the generated request builder**:
+   ```csharp
+   // In: FundItemRequestBuilder.cs
+   public FundItemRequestBuilder(...)
+       : base(requestAdapter, 
+              "{+baseurl}/api/funds/{fund%2Did}",  // ← This is your URL template
+              pathParameters)
+   ```
+
+2. **Or use GetUrlTemplate()** (for reference):
+   ```csharp
+   var template = KiotaClientMockExtensions.GetUrlTemplate(
+       _client.Api.Funds[fundId]
+   );
+   // But note: URL-decoded, so "{fund%2Did}" becomes "{fund-id}"
+   ```
+
+### When to Use Manual Mocking
+
+Use manual adapter mocking when:
+- ✅ You need `Arg.Any<T>()` behavior for path parameters
+- ✅ The extension method for your scenario doesn't exist
+- ✅ You need very specific predicate logic (headers, body validation, etc.)
+- ✅ You want maximum control over the mock setup
+
+Use extension methods when:
+- ✅ You know the exact path parameter values
+- ✅ A suitable extension method exists (`MockGetAsync`, `MockPostAsync`, etc.)
+- ✅ You want cleaner, more readable test code
+
+---
+
 

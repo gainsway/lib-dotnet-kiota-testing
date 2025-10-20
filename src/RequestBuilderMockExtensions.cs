@@ -345,6 +345,48 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a GET request that returns a collection and throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// _client.Api.Funds[fundId].Activities.MockGetCollectionAsyncException&lt;ActivitiesRequestBuilder, Activity&gt;(
+    ///     new ApiException("Internal Server Error") { ResponseStatusCode = 500 }
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockGetCollectionAsyncException<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendCollectionAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.GET)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
     /// Mocks a DELETE request that throws an exception.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>

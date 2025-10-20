@@ -18,8 +18,7 @@ public static class KiotaClientMockExtensions
     /// </summary>
     private static bool MatchesUrlTemplate(
         RequestInformation req,
-        string normalizedPattern,
-        string originalPattern
+        string normalizedPattern
     )
     {
         if (string.IsNullOrEmpty(req.UrlTemplate))
@@ -92,7 +91,7 @@ public static class KiotaClientMockExtensions
         // Normalize the user-provided pattern (strips baseurl, query params, normalizes encoding)
         var normalizedPattern = NormalizeUrlTemplate(urlTemplate);
 
-        return req => MatchesUrlTemplate(req, normalizedPattern, urlTemplate);
+        return req => MatchesUrlTemplate(req, normalizedPattern);
     }
 
     /// <summary>
@@ -382,6 +381,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead (e.g., _client.Api.Items[id].MockDeleteAsync()) for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientNoContentResponse<T>(
         this T mockedClient,
         string urlTemplate,
@@ -419,6 +421,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead (e.g., _client.Api.Items.MockGetCollectionAsync(collection)) for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientCollectionResponse<T, R>(
         this T mockedClient,
         string urlTemplate,
@@ -458,6 +463,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead (e.g., _client.Api.Status.MockGetAsync(string)) for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientResponse<T>(
         this T mockedClient,
         string urlTemplate,
@@ -496,6 +504,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead (e.g., _client.Api.Items[id].MockGetAsyncException(exception)) for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientResponseException<T, R>(
         this T mockedClient,
         string urlTemplate,
@@ -535,6 +546,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientNoContentResponseException<T>(
         this T mockedClient,
         string urlTemplate,
@@ -573,6 +587,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientCollectionResponseException<T, R>(
         this T mockedClient,
         string urlTemplate,
@@ -612,6 +629,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientResponseException<T>(
         this T mockedClient,
         string urlTemplate,

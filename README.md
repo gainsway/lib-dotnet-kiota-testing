@@ -23,6 +23,8 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
     - [7. Mock Exception Responses](#7-mock-exception-responses)
       - [GET Exception](#get-exception)
       - [GET Collection Exception](#get-collection-exception)
+      - [POST Exception](#post-exception)
+      - [PUT/PATCH Exception](#putpatch-exception)
       - [DELETE Exception](#delete-exception)
     - [8. Complex Scenarios](#8-complex-scenarios)
       - [Multiple Mocks for Same Endpoint](#multiple-mocks-for-same-endpoint)
@@ -264,18 +266,20 @@ mockClient.Api.Funds[fundId].MockDeleteAsync(
 
 ### 7. Mock Exception Responses
 
+All mock methods support exception overloads - just pass an `Exception` instead of a response object. When using exception overloads, you must provide explicit type parameters since the compiler cannot infer them from an exception.
+
 #### GET Exception
 
 ```csharp
 var nonExistentId = Guid.NewGuid();
 
-// Mock 404 Not Found
-mockClient.Api.Funds[nonExistentId].MockGetAsyncException<FundItemRequestBuilder, Fund>(
+// Mock 404 Not Found - using exception overload
+mockClient.Api.Funds[nonExistentId].MockGetAsync<FundItemRequestBuilder, Fund>(
     new ApiException("Fund not found") { ResponseStatusCode = 404 }
 );
 
-// Mock 401 Unauthorized
-mockClient.Api.Funds[fundId].MockGetAsyncException<FundItemRequestBuilder, Fund>(
+// Mock 401 Unauthorized with predicate
+mockClient.Api.Funds[fundId].MockGetAsync<FundItemRequestBuilder, Fund>(
     new ApiException("Unauthorized") { ResponseStatusCode = 401 },
     req => !req.Headers.ContainsKey("Authorization")
 );
@@ -284,9 +288,32 @@ mockClient.Api.Funds[fundId].MockGetAsyncException<FundItemRequestBuilder, Fund>
 #### GET Collection Exception
 
 ```csharp
-// Mock 500 Internal Server Error
-mockClient.Api.Activities.MockGetCollectionAsyncException<ActivitiesRequestBuilder, Activity>(
+// Mock 500 Internal Server Error - using exception overload
+mockClient.Api.Activities.MockGetCollectionAsync<ActivitiesRequestBuilder, Activity>(
     new ApiException("Internal server error") { ResponseStatusCode = 500 }
+);
+```
+
+#### POST Exception
+
+```csharp
+// Mock 400 Bad Request on POST
+mockClient.Api.Funds.MockPostAsync<FundsRequestBuilder, Fund>(
+    new ApiException("Validation failed") { ResponseStatusCode = 400 }
+);
+```
+
+#### PUT/PATCH Exception
+
+```csharp
+// Mock 409 Conflict on PUT
+mockClient.Api.Funds[fundId].MockPutAsync<FundItemRequestBuilder, Fund>(
+    new ApiException("Version conflict") { ResponseStatusCode = 409 }
+);
+
+// Mock 422 Unprocessable Entity on PATCH
+mockClient.Api.Funds[fundId].MockPatchAsync<FundItemRequestBuilder, Fund>(
+    new ApiException("Invalid field value") { ResponseStatusCode = 422 }
 );
 ```
 
@@ -295,8 +322,8 @@ mockClient.Api.Activities.MockGetCollectionAsyncException<ActivitiesRequestBuild
 ```csharp
 var conflictingFundId = Guid.NewGuid();
 
-// Mock 409 Conflict
-mockClient.Api.Funds[conflictingFundId].MockDeleteAsyncException<FundItemRequestBuilder>(
+// Mock 409 Conflict on DELETE
+mockClient.Api.Funds[conflictingFundId].MockDeleteAsync<FundItemRequestBuilder>(
     new ApiException("Conflict - Fund has active transactions") { ResponseStatusCode = 409 }
 );
 ```
@@ -617,6 +644,8 @@ _client.Api.Funds[fundId].MockDeleteAsync();
 
 ### `MockGetAsyncException<TBuilder, TResponse>()`
 
+**⚠️ DEPRECATED:** Use `MockGetAsync<TBuilder, TResponse>(Exception exception)` overload instead.
+
 Mocks a GET request that throws an exception.
 
 **Parameters:**
@@ -625,7 +654,7 @@ Mocks a GET request that throws an exception.
 
 **Returns:** The request builder for fluent chaining
 
-**Example:**
+**Deprecated Example:**
 ```csharp
 _client.Api.Funds[nonExistentId]
     .MockGetAsyncException<FundItemRequestBuilder, Fund>(
@@ -633,9 +662,19 @@ _client.Api.Funds[nonExistentId]
     );
 ```
 
+**New Syntax (Recommended):**
+```csharp
+_client.Api.Funds[nonExistentId]
+    .MockGetAsync<FundItemRequestBuilder, Fund>(
+        new ApiException("Not found") { ResponseStatusCode = 404 }
+    );
+```
+
 ---
 
 ### `MockGetCollectionAsyncException<TBuilder, TResponse>()`
+
+**⚠️ DEPRECATED:** Use `MockGetCollectionAsync<TBuilder, TResponse>(Exception exception)` overload instead.
 
 Mocks a GET collection request that throws an exception.
 
@@ -645,7 +684,7 @@ Mocks a GET collection request that throws an exception.
 
 **Returns:** The request builder for fluent chaining
 
-**Example:**
+**Deprecated Example:**
 ```csharp
 _client.Api.Activities
     .MockGetCollectionAsyncException<ActivitiesRequestBuilder, Activity>(
@@ -653,9 +692,19 @@ _client.Api.Activities
     );
 ```
 
+**New Syntax (Recommended):**
+```csharp
+_client.Api.Activities
+    .MockGetCollectionAsync<ActivitiesRequestBuilder, Activity>(
+        new ApiException("Internal server error") { ResponseStatusCode = 500 }
+    );
+```
+
 ---
 
 ### `MockDeleteAsyncException<TBuilder>()`
+
+**⚠️ DEPRECATED:** Use `MockDeleteAsync<TBuilder>(Exception exception)` overload instead.
 
 Mocks a DELETE request that throws an exception.
 
@@ -665,10 +714,18 @@ Mocks a DELETE request that throws an exception.
 
 **Returns:** The request builder for fluent chaining
 
-**Example:**
+**Deprecated Example:**
 ```csharp
 _client.Api.Funds[conflictingFundId]
     .MockDeleteAsyncException<FundItemRequestBuilder>(
+        new ApiException("Conflict") { ResponseStatusCode = 409 }
+    );
+```
+
+**New Syntax (Recommended):**
+```csharp
+_client.Api.Funds[conflictingFundId]
+    .MockDeleteAsync<FundItemRequestBuilder>(
         new ApiException("Conflict") { ResponseStatusCode = 409 }
     );
 ```

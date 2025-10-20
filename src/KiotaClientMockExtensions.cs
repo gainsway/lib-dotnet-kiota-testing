@@ -32,6 +32,23 @@ public static class KiotaClientMockExtensions
     }
 
     /// <summary>
+    /// Legacy URL template matching using EndsWith pattern.
+    /// This was the original implementation before positional parameter matching was added.
+    /// </summary>
+    [Obsolete("This uses legacy EndsWith matching. Migrate to the type-safe request builder API.")]
+    private static bool MatchesUrlTemplateLegacy(RequestInformation req, string urlTemplate)
+    {
+        if (string.IsNullOrEmpty(req.UrlTemplate))
+        {
+            return false;
+        }
+
+        // Original implementation: strip query params and use EndsWith
+        var cleanedUrl = Regex.Replace(req.UrlTemplate, @"\{\?.*?\}", string.Empty);
+        return cleanedUrl.EndsWith(urlTemplate, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Creates a predicate expression to match a <see cref="RequestInformation"/> object
     /// based on its URL template matching the specified pattern.
     /// </summary>
@@ -76,6 +93,18 @@ public static class KiotaClientMockExtensions
         var normalizedPattern = NormalizeUrlTemplate(urlTemplate);
 
         return req => MatchesUrlTemplate(req, normalizedPattern, urlTemplate);
+    }
+
+    /// <summary>
+    /// Legacy predicate using EndsWith matching for backward compatibility.
+    /// This was the original implementation before positional parameter matching was added.
+    /// </summary>
+    [Obsolete("This uses legacy EndsWith matching. Migrate to the type-safe request builder API.")]
+    private static Expression<
+        Predicate<RequestInformation>
+    > RequestInformationUrlTemplatePredicateLegacy(string urlTemplate)
+    {
+        return req => MatchesUrlTemplateLegacy(req, urlTemplate);
     }
 
     /// <summary>
@@ -312,6 +341,9 @@ public static class KiotaClientMockExtensions
     /// <param name="requestInfoPredicate">
     /// An optional predicate to further filter the request information.
     /// </param>
+    [Obsolete(
+        "Use the type-safe request builder API instead (e.g., _client.Api.Users[id].MockGetAsync(user)) for better type safety and clarity. This method will be removed in a future version."
+    )]
     public static void MockClientResponse<T, R>(
         this T mockedClient,
         string urlTemplate,

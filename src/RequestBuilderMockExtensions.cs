@@ -63,6 +63,74 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a GET request that throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// var nonExistentId = Guid.NewGuid();
+    ///
+    /// _client.Api.Funds[nonExistentId].MockGetAsync&lt;FundItemRequestBuilder, Fund&gt;(
+    ///     new ApiException("Fund not found") { ResponseStatusCode = 404 }
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockGetAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.GET)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a GET request that throws an exception.
+    /// [DEPRECATED: Use MockGetAsync&lt;TBuilder, TResponse&gt;(Exception) overload instead]
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    [Obsolete(
+        "Use MockGetAsync<TBuilder, TResponse>(Exception) overload instead. This method will be removed in a future version."
+    )]
+    public static TBuilder MockGetAsyncException<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        return MockGetAsync<TBuilder, TResponse>(requestBuilder, exception, requestInfoPredicate);
+    }
+
+    /// <summary>
     /// Mocks a GET request that returns a string.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
@@ -95,6 +163,43 @@ public static class RequestBuilderMockExtensions
                 Arg.Any<CancellationToken>()
             )
             .Returns(response);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a GET request for a string that throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// _client.Api.Status.MockGetAsync(new ApiException("Service unavailable") { ResponseStatusCode = 503 });
+    /// </code>
+    /// </example>
+    public static TBuilder MockGetAsync<TBuilder>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendPrimitiveAsync<string>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.GET)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
 
         return requestBuilder;
     }
@@ -146,6 +251,76 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a GET request that returns a collection and throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// _client.Api.Funds[fundId].Activities.MockGetCollectionAsync&lt;ActivitiesRequestBuilder, Activity&gt;(
+    ///     new ApiException("Internal Server Error") { ResponseStatusCode = 500 }
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockGetCollectionAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendCollectionAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.GET)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a GET request that returns a collection and throws an exception.
+    /// [DEPRECATED: Use MockGetCollectionAsync&lt;TBuilder, TResponse&gt;(Exception) overload instead]
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    [Obsolete(
+        "Use MockGetCollectionAsync<TBuilder, TResponse>(Exception) overload instead. This method will be removed in a future version."
+    )]
+    public static TBuilder MockGetCollectionAsyncException<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        return MockGetCollectionAsync<TBuilder, TResponse>(
+            requestBuilder,
+            exception,
+            requestInfoPredicate
+        );
+    }
+
+    /// <summary>
     /// Mocks a POST request that returns a single object.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
@@ -194,6 +369,136 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a POST request that throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// _client.Api.Funds.MockPostAsync&lt;FundsRequestBuilder, Fund&gt;(
+    ///     new ApiException("Validation failed") { ResponseStatusCode = 400 }
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockPostAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.POST)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a POST request that returns a collection of objects.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="response">The collection to return when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// var activities = new List&lt;Activity&gt;
+    /// {
+    ///     new Activity { Id = Guid.NewGuid(), Name = "Activity 1" },
+    ///     new Activity { Id = Guid.NewGuid(), Name = "Activity 2" }
+    /// };
+    ///
+    /// _client.Api.Funds[fundId].Activities.MockPostCollectionAsync(activities);
+    /// </code>
+    /// </example>
+    public static TBuilder MockPostCollectionAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        IEnumerable<TResponse>? response,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendCollectionAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.POST)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(response);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a POST request that returns a collection and throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// _client.Api.Funds[fundId].Activities.MockPostCollectionAsync&lt;ActivitiesRequestBuilder, Activity&gt;(
+    ///     new ApiException("Validation failed") { ResponseStatusCode = 400 }
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockPostCollectionAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendCollectionAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.POST)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
     /// Mocks a PUT request that returns a single object.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
@@ -229,6 +534,41 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a PUT request that throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    public static TBuilder MockPutAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.PUT)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
     /// Mocks a PATCH request that returns a single object.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
@@ -259,6 +599,41 @@ public static class RequestBuilderMockExtensions
                 Arg.Any<CancellationToken>()
             )
             .Returns(response);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a PATCH request that throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    public static TBuilder MockPatchAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.PATCH)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
 
         return requestBuilder;
     }
@@ -301,92 +676,6 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
-    /// Mocks a GET request that throws an exception.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="exception">The exception to throw when this endpoint is called.</param>
-    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
-    /// <returns>The request builder for fluent chaining.</returns>
-    /// <example>
-    /// <code>
-    /// var nonExistentId = Guid.NewGuid();
-    ///
-    /// _client.Api.Funds[nonExistentId].MockGetAsyncException&lt;FundItemRequestBuilder, Fund&gt;(
-    ///     new ApiException("Fund not found") { ResponseStatusCode = 404 }
-    /// );
-    /// </code>
-    /// </example>
-    public static TBuilder MockGetAsyncException<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Exception exception,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable
-    {
-        var mockAdapter = GetMockAdapter(requestBuilder);
-        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
-
-        mockAdapter
-            .SendAsync<TResponse>(
-                Arg.Is<RequestInformation>(req =>
-                    MatchesBuilder(req, urlTemplate, pathParameters, Method.GET)
-                    && (requestInfoPredicate == null || requestInfoPredicate(req))
-                ),
-                Arg.Any<ParsableFactory<TResponse>>(),
-                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
-                Arg.Any<CancellationToken>()
-            )
-            .Throws(exception);
-
-        return requestBuilder;
-    }
-
-    /// <summary>
-    /// Mocks a GET request that returns a collection and throws an exception.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="exception">The exception to throw when this endpoint is called.</param>
-    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
-    /// <returns>The request builder for fluent chaining.</returns>
-    /// <example>
-    /// <code>
-    /// _client.Api.Funds[fundId].Activities.MockGetCollectionAsyncException&lt;ActivitiesRequestBuilder, Activity&gt;(
-    ///     new ApiException("Internal Server Error") { ResponseStatusCode = 500 }
-    /// );
-    /// </code>
-    /// </example>
-    public static TBuilder MockGetCollectionAsyncException<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Exception exception,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable
-    {
-        var mockAdapter = GetMockAdapter(requestBuilder);
-        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
-
-        mockAdapter
-            .SendCollectionAsync<TResponse>(
-                Arg.Is<RequestInformation>(req =>
-                    MatchesBuilder(req, urlTemplate, pathParameters, Method.GET)
-                    && (requestInfoPredicate == null || requestInfoPredicate(req))
-                ),
-                Arg.Any<ParsableFactory<TResponse>>(),
-                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
-                Arg.Any<CancellationToken>()
-            )
-            .Throws(exception);
-
-        return requestBuilder;
-    }
-
-    /// <summary>
     /// Mocks a DELETE request that throws an exception.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
@@ -396,12 +685,12 @@ public static class RequestBuilderMockExtensions
     /// <returns>The request builder for fluent chaining.</returns>
     /// <example>
     /// <code>
-    /// _client.Api.Funds[fundId].MockDeleteAsyncException(
+    /// _client.Api.Funds[fundId].MockDeleteAsync(
     ///     new ApiException("Conflict") { ResponseStatusCode = 409 }
     /// );
     /// </code>
     /// </example>
-    public static TBuilder MockDeleteAsyncException<TBuilder>(
+    public static TBuilder MockDeleteAsync<TBuilder>(
         this TBuilder requestBuilder,
         Exception exception,
         Func<RequestInformation, bool>? requestInfoPredicate = null
@@ -423,6 +712,28 @@ public static class RequestBuilderMockExtensions
             .Throws(exception);
 
         return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a DELETE request that throws an exception.
+    /// [DEPRECATED: Use MockDeleteAsync&lt;TBuilder&gt;(Exception) overload instead]
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    [Obsolete(
+        "Use MockDeleteAsync<TBuilder>(Exception) overload instead. This method will be removed in a future version."
+    )]
+    public static TBuilder MockDeleteAsyncException<TBuilder>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+    {
+        return MockDeleteAsync<TBuilder>(requestBuilder, exception, requestInfoPredicate);
     }
 
     /// <summary>

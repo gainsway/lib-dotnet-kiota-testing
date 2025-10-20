@@ -109,15 +109,15 @@ public class RequestBuilderMockExtensionsTests
         // Arrange
         var expectedException = new InvalidOperationException("Item not found");
 
-        // Act - Type-safe API setup
+        // Act - Type-safe API setup with exception overload
         _mockClient
             .Api.Items["999"]
-            .MockGetAsyncException<ItemRequestBuilder, TestResponse>(expectedException);
+            .MockGetAsync<ItemRequestBuilder, TestResponse>(expectedException);
 
         // Assert - Verify mock setup completed without exceptions
         Assert.That(_mockClient, Is.Not.Null);
         Assert.Pass(
-            "Mock setup successful using type-safe API: _mockClient.Api.Items[id].MockGetAsyncException(exception)"
+            "Mock setup successful using type-safe API: _mockClient.Api.Items[id].MockGetAsync(exception)"
         );
     }
 

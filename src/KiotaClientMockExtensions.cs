@@ -351,9 +351,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
@@ -390,9 +392,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
@@ -432,9 +436,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
@@ -473,9 +479,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
@@ -515,9 +523,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
@@ -556,9 +566,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
@@ -598,9 +610,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)
@@ -639,9 +653,11 @@ public static class KiotaClientMockExtensions
     {
         var requestAdapter = GetRequestAdapter(mockedClient);
 
-        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicate(
+#pragma warning disable CS0618 // Type or member is obsolete
+        var requestInformationUrlTemplatePredicate = RequestInformationUrlTemplatePredicateLegacy(
             urlTemplate
         );
+#pragma warning restore CS0618 // Type or member is obsolete
         var requestInformationPredicate =
             requestInfoPredicate != null
                 ? requestInfoPredicate.And(requestInformationUrlTemplatePredicate)

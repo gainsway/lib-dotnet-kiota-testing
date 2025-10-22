@@ -256,9 +256,22 @@ var fundId = Guid.NewGuid();
 // Mock successful DELETE (no content)
 mockClient.Api.Funds[fundId].MockDeleteAsync();
 
-// With conditions
+// Mock DELETE that returns a single object (some APIs return the deleted object)
+var deletedFund = new Fund { Id = fundId, Name = "Deleted Fund", Status = FundStatus.Deleted };
+mockClient.Api.Funds[fundId].MockDeleteAsync(deletedFund);
+
+// Mock DELETE that returns a collection (bulk delete operations)
+var deletedFunds = new List<Fund>
+{
+    new Fund { Id = Guid.NewGuid(), Name = "Fund 1", Status = FundStatus.Deleted },
+    new Fund { Id = Guid.NewGuid(), Name = "Fund 2", Status = FundStatus.Deleted }
+};
+mockClient.Api.Funds.MockDeleteCollectionAsync(deletedFunds);
+
+// With conditions (e.g., with request body)
 mockClient.Api.Funds[fundId].MockDeleteAsync(
-    req => req.Headers.ContainsKey("If-Match")
+    deletedFund,
+    req => req.Content != null && req.Headers.ContainsKey("If-Match")
 );
 ```
 
@@ -322,9 +335,19 @@ mockClient.Api.Funds[fundId].MockPatchAsync<FundItemRequestBuilder, Fund>(
 ```csharp
 var conflictingFundId = Guid.NewGuid();
 
-// Mock 409 Conflict on DELETE
+// Mock 409 Conflict on DELETE (no content response)
 mockClient.Api.Funds[conflictingFundId].MockDeleteAsync<FundItemRequestBuilder>(
     new ApiException("Conflict - Fund has active transactions") { ResponseStatusCode = 409 }
+);
+
+// Mock 409 Conflict on DELETE (with response body)
+mockClient.Api.Funds[conflictingFundId].MockDeleteAsync<FundItemRequestBuilder, Fund>(
+    new ApiException("Cannot delete fund with active transactions") { ResponseStatusCode = 409 }
+);
+
+// Mock exception on bulk DELETE
+mockClient.Api.Funds.MockDeleteCollectionAsync<FundsRequestBuilder, Fund>(
+    new ApiException("Bulk delete not allowed") { ResponseStatusCode = 403 }
 );
 ```
 
@@ -642,6 +665,55 @@ _client.Api.Funds[fundId].MockDeleteAsync();
 
 ---
 
+### `MockDeleteAsync<TBuilder, TResponse>()`
+
+Mocks a DELETE request that returns a single object.
+Some APIs return data in DELETE responses (e.g., returning the deleted object or confirmation data).
+
+**Parameters:**
+- `response` (TResponse?) - The object to return
+- `requestInfoPredicate` (optional) - Additional conditions to match the request
+
+**Returns:** The request builder for fluent chaining
+
+**Example:**
+```csharp
+var deletedFund = new Fund { Id = fundId, Name = "Deleted Fund", Status = FundStatus.Deleted };
+_client.Api.Funds[fundId].MockDeleteAsync(deletedFund);
+
+// With request body validation
+_client.Api.Funds[fundId].MockDeleteAsync(
+    deletedFund,
+    req => req.Content != null
+);
+```
+
+---
+
+### `MockDeleteCollectionAsync<TBuilder, TResponse>()`
+
+Mocks a DELETE request that returns a collection of objects.
+Some APIs return multiple items in DELETE responses (e.g., bulk delete operations).
+
+**Parameters:**
+- `response` (IEnumerable<TResponse>?) - The collection to return
+- `requestInfoPredicate` (optional) - Additional conditions to match the request
+
+**Returns:** The request builder for fluent chaining
+
+**Example:**
+```csharp
+var deletedFunds = new List<Fund>
+{
+    new Fund { Id = Guid.NewGuid(), Name = "Fund 1", Status = FundStatus.Deleted },
+    new Fund { Id = Guid.NewGuid(), Name = "Fund 2", Status = FundStatus.Deleted }
+};
+
+_client.Api.Funds.MockDeleteCollectionAsync(deletedFunds);
+```
+
+---
+
 ### `MockGetAsyncException<TBuilder, TResponse>()`
 
 **⚠️ DEPRECATED:** Use `MockGetAsync<TBuilder, TResponse>(Exception exception)` overload instead.
@@ -706,7 +778,7 @@ _client.Api.Activities
 
 **⚠️ DEPRECATED:** Use `MockDeleteAsync<TBuilder>(Exception exception)` overload instead.
 
-Mocks a DELETE request that throws an exception.
+Mocks a DELETE request that throws an exception (no content response type).
 
 **Parameters:**
 - `exception` (Exception) - The exception to throw
@@ -727,6 +799,22 @@ _client.Api.Funds[conflictingFundId]
 _client.Api.Funds[conflictingFundId]
     .MockDeleteAsync<FundItemRequestBuilder>(
         new ApiException("Conflict") { ResponseStatusCode = 409 }
+    );
+```
+
+**For DELETE operations that return a response body:**
+```csharp
+_client.Api.Funds[conflictingFundId]
+    .MockDeleteAsync<FundItemRequestBuilder, Fund>(
+        new ApiException("Conflict") { ResponseStatusCode = 409 }
+    );
+```
+
+**For bulk DELETE operations:**
+```csharp
+_client.Api.Funds
+    .MockDeleteCollectionAsync<FundsRequestBuilder, Fund>(
+        new ApiException("Bulk delete not allowed") { ResponseStatusCode = 403 }
     );
 ```
 

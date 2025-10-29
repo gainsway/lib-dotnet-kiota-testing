@@ -995,7 +995,7 @@ The helper methods try these naming variations automatically:
 1. `select` (original)
 2. `$select` (OData style)
 3. `%24select` (URL-encoded OData)
-4. `select-param` (kebab-case)
+4. `order-by` (kebab-case, for camelCase `orderBy`)
 5. `Select` (PascalCase)
 
 **Legacy Approach - Direct Access:**

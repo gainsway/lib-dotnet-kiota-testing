@@ -177,13 +177,31 @@ mockClient.Api.Funds[fundId].MockGetAsync(
     req => req.Headers.ContainsKey("Authorization")
 );
 
-// Multiple conditions
+// Multiple conditions with query parameters (type-safe helpers)
 mockClient.Api.Funds[fundId].MockGetAsync(
     expectedFund,
     req => req.Headers.ContainsKey("Authorization")
-        && req.QueryParameters.ContainsKey("include")
+        && req.GetQueryParameter("include").ToString() == "activities"
+);
+
+// Check if optional query parameter exists
+mockClient.Api.Funds.MockGetCollectionAsync(
+    funds,
+    req => {
+        // Required: must have $select parameter
+        if (!req.TryGetQueryParameter("select", out var selectValue))
+            return false;
+        
+        // Optional: $filter parameter
+        var hasFilter = req.TryGetQueryParameter("filter", out var filterValue);
+        
+        return selectValue.ToString() == "id,name"
+            && (!hasFilter || filterValue.ToString().Contains("active"));
+    }
 );
 ```
+
+**Note:** Use `GetQueryParameter()` and `TryGetQueryParameter()` for type-safe query parameter access. These methods automatically try multiple naming conventions (e.g., `select`, `$select`, `%24select`) and provide helpful error messages if parameters are not found.
 
 ---
 
@@ -936,9 +954,54 @@ When you call `req.GetPathParameter("fundId")`, it automatically tries:
 
 #### Query Parameters
 
-Query parameters are accessed through `req.QueryParameters`:
+Query parameters can be accessed using type-safe helper methods similar to path parameters:
+
+**Recommended Approach - Type-Safe Helpers:**
 
 ```csharp
+// Use GetQueryParameter() - tries multiple naming conventions
+mockClient.MockClientCollectionResponse(
+    "/api/items",
+    items,
+    req => req.GetQueryParameter("select").ToString() == "id,name"
+        && req.GetQueryParameter("filter").ToString() == "status eq 'active'"
+);
+
+// Works with OData-style parameters ($select, $filter, etc.)
+mockClient.Api.Funds.MockGetCollectionAsync(
+    funds,
+    req => req.GetQueryParameter("select").ToString() == "id,name"
+        // Automatically tries: select, $select, %24select, etc.
+);
+
+// Use TryGetQueryParameter() for optional parameters
+mockClient.Api.Items.MockGetCollectionAsync(
+    items,
+    req => {
+        // Required parameter
+        if (!req.TryGetQueryParameter("select", out var selectValue))
+            return false;
+        
+        // Optional parameter
+        var hasFilter = req.TryGetQueryParameter("filter", out var filterValue);
+        
+        return selectValue.ToString() == "id,name" 
+            && (!hasFilter || filterValue.ToString() == "status eq 'active'");
+    }
+);
+```
+
+The helper methods try these naming variations automatically:
+1. `select` (original)
+2. `$select` (OData style)
+3. `%24select` (URL-encoded OData)
+4. `select-param` (kebab-case)
+5. `Select` (PascalCase)
+
+**Legacy Approach - Direct Access:**
+
+```csharp
+// Direct access (not recommended - no naming convention handling)
 mockClient.MockClientCollectionResponse(
     "/api/items",
     items,

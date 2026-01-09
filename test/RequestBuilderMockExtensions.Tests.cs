@@ -104,6 +104,114 @@ public class RequestBuilderMockExtensionsTests
     }
 
     [Test]
+    public void MockDeleteAsync_WithSingleObjectResponse_ShouldSetupMockSuccessfully()
+    {
+        // Arrange
+        var deletedItem = new TestResponse { Value = "deleted-item" };
+
+        // Act - Type-safe API setup for DELETE with response body
+        _mockClient.Api.Items["123"].MockDeleteAsync(deletedItem);
+
+        // Assert - Verify mock setup completed without exceptions
+        Assert.That(_mockClient, Is.Not.Null);
+        Assert.Pass(
+            "Mock setup successful using type-safe API: _mockClient.Api.Items[id].MockDeleteAsync(response)"
+        );
+    }
+
+    [Test]
+    public void MockDeleteAsync_WithSingleObjectAndPredicate_ShouldSetupMockSuccessfully()
+    {
+        // Arrange
+        var deletedItem = new TestResponse { Value = "deleted-item" };
+
+        // Act - Type-safe API setup for DELETE with response body and predicate
+        _mockClient.Api.Items["123"].MockDeleteAsync(deletedItem, req => req.Content != null);
+
+        // Assert - Verify mock setup completed without exceptions
+        Assert.That(_mockClient, Is.Not.Null);
+        Assert.Pass(
+            "Mock setup successful using type-safe API: _mockClient.Api.Items[id].MockDeleteAsync(response, predicate)"
+        );
+    }
+
+    [Test]
+    public void MockDeleteAsync_WithException_ShouldSetupMockSuccessfully()
+    {
+        // Arrange
+        var expectedException = new InvalidOperationException("Cannot delete item");
+
+        // Act - Type-safe API setup for DELETE that throws exception
+        _mockClient
+            .Api.Items["123"]
+            .MockDeleteAsync<ItemRequestBuilder, TestResponse>(expectedException);
+
+        // Assert - Verify mock setup completed without exceptions
+        Assert.That(_mockClient, Is.Not.Null);
+        Assert.Pass(
+            "Mock setup successful using type-safe API: _mockClient.Api.Items[id].MockDeleteAsync<TBuilder, TResponse>(exception)"
+        );
+    }
+
+    [Test]
+    public void MockDeleteCollectionAsync_ShouldSetupMockSuccessfully()
+    {
+        // Arrange
+        var deletedItems = new List<TestResponse>
+        {
+            new TestResponse { Value = "deleted-item-1" },
+            new TestResponse { Value = "deleted-item-2" },
+        };
+
+        // Act - Type-safe API setup for DELETE with collection response
+        _mockClient.Api.Items.MockDeleteCollectionAsync(deletedItems);
+
+        // Assert - Verify mock setup completed without exceptions
+        Assert.That(_mockClient, Is.Not.Null);
+        Assert.Pass(
+            "Mock setup successful using type-safe API: _mockClient.Api.Items.MockDeleteCollectionAsync(collection)"
+        );
+    }
+
+    [Test]
+    public void MockDeleteCollectionAsync_WithPredicate_ShouldSetupMockSuccessfully()
+    {
+        // Arrange
+        var deletedItems = new List<TestResponse>
+        {
+            new TestResponse { Value = "deleted-item-1" },
+            new TestResponse { Value = "deleted-item-2" },
+        };
+
+        // Act - Type-safe API setup for DELETE with collection response and predicate
+        _mockClient.Api.Items.MockDeleteCollectionAsync(deletedItems, req => req.Content != null);
+
+        // Assert - Verify mock setup completed without exceptions
+        Assert.That(_mockClient, Is.Not.Null);
+        Assert.Pass(
+            "Mock setup successful using type-safe API: _mockClient.Api.Items.MockDeleteCollectionAsync(collection, predicate)"
+        );
+    }
+
+    [Test]
+    public void MockDeleteCollectionAsync_WithException_ShouldSetupMockSuccessfully()
+    {
+        // Arrange
+        var expectedException = new InvalidOperationException("Bulk delete not allowed");
+
+        // Act - Type-safe API setup for DELETE collection that throws exception
+        _mockClient.Api.Items.MockDeleteCollectionAsync<ItemsRequestBuilder, TestResponse>(
+            expectedException
+        );
+
+        // Assert - Verify mock setup completed without exceptions
+        Assert.That(_mockClient, Is.Not.Null);
+        Assert.Pass(
+            "Mock setup successful using type-safe API: _mockClient.Api.Items.MockDeleteCollectionAsync<TBuilder, TResponse>(exception)"
+        );
+    }
+
+    [Test]
     public void MockGetAsyncException_ShouldSetupMockSuccessfully()
     {
         // Arrange
@@ -154,6 +262,44 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(_mockClient, Is.Not.Null);
         Assert.Pass(
             "Multiple mocks setup successfully using type-safe API: _mockClient.Api.Items[id1].MockGetAsync() and _mockClient.Api.Items[id2].MockGetAsync()"
+        );
+    }
+
+    [Test]
+    public void MockDelete_AllVariants_ShouldSetupSuccessfully()
+    {
+        // This test demonstrates all DELETE variants working together
+
+        // Arrange
+        var itemId = "item-1";
+        var deletedItem = new TestResponse { Value = "deleted-item" };
+        var deletedItems = new List<TestResponse>
+        {
+            new TestResponse { Value = "deleted-1" },
+            new TestResponse { Value = "deleted-2" },
+        };
+
+        // Act - Setup all DELETE variants
+        // 1. No content DELETE
+        _mockClient.Api.Items[itemId].MockDeleteAsync();
+
+        // 2. DELETE with single object response
+        _mockClient.Api.Items["item-2"].MockDeleteAsync(deletedItem);
+
+        // 3. DELETE with collection response
+        _mockClient.Api.Items.MockDeleteCollectionAsync(deletedItems);
+
+        // 4. DELETE with exception
+        _mockClient
+            .Api.Items["item-error"]
+            .MockDeleteAsync<ItemRequestBuilder, TestResponse>(
+                new InvalidOperationException("Cannot delete")
+            );
+
+        // Assert
+        Assert.That(_mockClient, Is.Not.Null);
+        Assert.Pass(
+            "All DELETE variants setup successfully: no-content, single object, collection, and exception"
         );
     }
 }

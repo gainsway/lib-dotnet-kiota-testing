@@ -737,6 +737,187 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a DELETE request that returns a single object.
+    /// Some APIs return data in DELETE responses (e.g., returning the deleted object or confirmation data).
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="response">The object to return when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// var fundId = Guid.NewGuid();
+    /// var deletedFund = new Fund { Id = fundId, Name = "Deleted Fund", Status = FundStatus.Deleted };
+    ///
+    /// _client.Api.Funds[fundId].MockDeleteAsync(deletedFund);
+    ///
+    /// // With body validation
+    /// _client.Api.Funds[fundId].MockDeleteAsync(
+    ///     deletedFund,
+    ///     req => req.Content != null
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockDeleteAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        TResponse? response,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.DELETE)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(response);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a DELETE request that returns a single object and throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// _client.Api.Funds[fundId].MockDeleteAsync&lt;FundItemRequestBuilder, Fund&gt;(
+    ///     new ApiException("Cannot delete fund with active transactions") { ResponseStatusCode = 409 }
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockDeleteAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.DELETE)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a DELETE request that returns a collection of objects.
+    /// Some APIs return multiple items in DELETE responses (e.g., bulk delete operations).
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="response">The collection to return when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// var deletedFunds = new List&lt;Fund&gt;
+    /// {
+    ///     new Fund { Id = Guid.NewGuid(), Name = "Fund 1", Status = FundStatus.Deleted },
+    ///     new Fund { Id = Guid.NewGuid(), Name = "Fund 2", Status = FundStatus.Deleted }
+    /// };
+    ///
+    /// _client.Api.Funds.MockDeleteCollectionAsync(deletedFunds);
+    /// </code>
+    /// </example>
+    public static TBuilder MockDeleteCollectionAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        IEnumerable<TResponse>? response,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendCollectionAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.DELETE)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(response);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a DELETE request that returns a collection and throws an exception.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="exception">The exception to throw when this endpoint is called.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <example>
+    /// <code>
+    /// _client.Api.Funds.MockDeleteCollectionAsync&lt;FundsRequestBuilder, Fund&gt;(
+    ///     new ApiException("Bulk delete not allowed") { ResponseStatusCode = 403 }
+    /// );
+    /// </code>
+    /// </example>
+    public static TBuilder MockDeleteCollectionAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Exception exception,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendCollectionAsync<TResponse>(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.DELETE)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<ParsableFactory<TResponse>>(),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
     /// Gets the URL template and path parameters from a request builder using reflection.
     /// </summary>
     private static (string urlTemplate, Dictionary<string, object> pathParameters) GetBuilderInfo(

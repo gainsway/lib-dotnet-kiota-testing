@@ -100,6 +100,18 @@ mockClient.Api.Funds[fundId].MockPatchAsync(patchedFund);
 
 // Mock DELETE request
 mockClient.Api.Funds[fundId].MockDeleteAsync();
+
+// Mock DELETE request that returns the deleted object
+var deletedFund = new Fund { Id = fundId, Name = "Deleted Fund", Status = FundStatus.Deleted };
+mockClient.Api.Funds[fundId].MockDeleteAsync(deletedFund);
+
+// Mock bulk DELETE that returns a collection
+var deletedFunds = new List<Fund>
+{
+    new Fund { Id = fundId1, Name = "Fund 1", Status = FundStatus.Deleted },
+    new Fund { Id = fundId2, Name = "Fund 2", Status = FundStatus.Deleted }
+};
+mockClient.Api.Funds.MockDeleteCollectionAsync(deletedFunds);
 ```
 
 ### Exception Mocking
@@ -326,13 +338,18 @@ builder.MockGetAsync<TBuilder, TResponse>(response);
 builder.MockGetAsync<TBuilder>(stringResponse);
 builder.MockGetCollectionAsync<TBuilder, TResponse>(collection);
 builder.MockPostAsync<TBuilder, TResponse>(response);
+builder.MockPostCollectionAsync<TBuilder, TResponse>(collection);
 builder.MockPutAsync<TBuilder, TResponse>(response);
 builder.MockPatchAsync<TBuilder, TResponse>(response);
 builder.MockDeleteAsync<TBuilder>();
+builder.MockDeleteAsync<TBuilder, TResponse>(response);
+builder.MockDeleteCollectionAsync<TBuilder, TResponse>(collection);
 
 // Exception variants
 builder.MockGetAsyncException<TBuilder, TResponse>(exception);
 builder.MockDeleteAsyncException<TBuilder>(exception);
+builder.MockDeleteAsync<TBuilder, TResponse>(exception);  // DELETE with response body exception
+builder.MockDeleteCollectionAsync<TBuilder, TResponse>(exception);  // Bulk DELETE exception
 ```
 
 ## Backward Compatibility

@@ -247,4 +247,158 @@ public static class RequestInformationExtensions
 
         return char.ToUpper(value[0]) + value.Substring(1);
     }
+
+    /// <summary>
+    /// Tries to get a query parameter value from the RequestInformation, attempting multiple naming conventions.
+    /// Tries: original name, $-prefixed (OData style), kebab-case, URL-encoded variations.
+    /// </summary>
+    /// <param name="requestInfo">The request information object.</param>
+    /// <param name="parameterName">The parameter name to search for (e.g., "select", "filter").</param>
+    /// <param name="value">The parameter value if found.</param>
+    /// <returns>True if the parameter was found; otherwise, false.</returns>
+    /// <example>
+    /// <code>
+    /// // Works with any of these Kiota-generated keys: select, $select, %24select
+    /// if (req.TryGetQueryParameter("select", out var selectValue))
+    /// {
+    ///     return selectValue.ToString() == "id,name";
+    /// }
+    /// </code>
+    /// </example>
+    public static bool TryGetQueryParameter(
+        this RequestInformation requestInfo,
+        string parameterName,
+        out object? value
+    )
+    {
+        value = null;
+
+        if (requestInfo?.QueryParameters == null)
+        {
+            return false;
+        }
+
+        // Try original name
+        if (requestInfo.QueryParameters.TryGetValue(parameterName, out value))
+        {
+            return true;
+        }
+
+        // Try $-prefixed (OData style: $select, $filter, $expand, etc.)
+        var odataStyle = $"${parameterName}";
+        if (requestInfo.QueryParameters.TryGetValue(odataStyle, out value))
+        {
+            return true;
+        }
+
+        // Try URL-encoded $-prefixed (%24select)
+        var encodedOdataStyle = Uri.EscapeDataString(odataStyle);
+        if (requestInfo.QueryParameters.TryGetValue(encodedOdataStyle, out value))
+        {
+            return true;
+        }
+
+        // Try kebab-case
+        var kebabCase = ToKebabCase(parameterName);
+        if (requestInfo.QueryParameters.TryGetValue(kebabCase, out value))
+        {
+            return true;
+        }
+
+        // Try URL-encoded kebab-case
+        var encodedKebabCase = Uri.EscapeDataString(kebabCase);
+        if (requestInfo.QueryParameters.TryGetValue(encodedKebabCase, out value))
+        {
+            return true;
+        }
+
+        // Try PascalCase
+        var pascalCase = ToPascalCase(parameterName);
+        if (requestInfo.QueryParameters.TryGetValue(pascalCase, out value))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets a query parameter value from the RequestInformation, attempting multiple naming conventions.
+    /// Throws a descriptive exception if the parameter is not found.
+    /// </summary>
+    /// <param name="requestInfo">The request information object.</param>
+    /// <param name="parameterName">The parameter name to search for (e.g., "select", "filter").</param>
+    /// <returns>The parameter value.</returns>
+    /// <exception cref="KeyNotFoundException">
+    /// Thrown when the parameter is not found. The exception message includes the actual parameter keys
+    /// available in the request and the URL template from Kiota.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// // Works with any of these Kiota-generated keys: select, $select, %24select
+    /// var selectValue = req.GetQueryParameter("select");
+    /// return selectValue.ToString() == "id,name";
+    /// </code>
+    /// </example>
+    public static object GetQueryParameter(
+        this RequestInformation requestInfo,
+        string parameterName
+    )
+    {
+        if (TryGetQueryParameter(requestInfo, parameterName, out var value))
+        {
+            return value!;
+        }
+
+        // Build a helpful error message
+        var availableKeys = requestInfo?.QueryParameters?.Keys.ToList() ?? new List<string>();
+        var actualUrlTemplate = requestInfo?.UrlTemplate ?? "<unknown>";
+
+        var errorMessage = new StringBuilder();
+        errorMessage.AppendLine(
+            $"Query parameter '{parameterName}' not found in RequestInformation.QueryParameters."
+        );
+        errorMessage.AppendLine();
+        errorMessage.AppendLine("Tried the following naming variations:");
+        errorMessage.AppendLine($"  - {parameterName} (original)");
+        errorMessage.AppendLine($"  - ${parameterName} (OData style)");
+        errorMessage.AppendLine(
+            $"  - {Uri.EscapeDataString($"${parameterName}")} (URL-encoded OData)"
+        );
+        errorMessage.AppendLine($"  - {ToKebabCase(parameterName)} (kebab-case)");
+        errorMessage.AppendLine(
+            $"  - {Uri.EscapeDataString(ToKebabCase(parameterName))} (URL-encoded kebab-case)"
+        );
+        errorMessage.AppendLine($"  - {ToPascalCase(parameterName)} (PascalCase)");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine($"Kiota's actual URL template: {actualUrlTemplate}");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine("Available query parameter keys:");
+        if (availableKeys.Any())
+        {
+            foreach (var key in availableKeys)
+            {
+                var decodedKey = Uri.UnescapeDataString(key);
+                if (decodedKey != key)
+                {
+                    errorMessage.AppendLine($"  - {key} (decoded: {decodedKey})");
+                }
+                else
+                {
+                    errorMessage.AppendLine($"  - {key}");
+                }
+            }
+        }
+        else
+        {
+            errorMessage.AppendLine("  (none - no query parameters in this request)");
+        }
+        errorMessage.AppendLine();
+        errorMessage.AppendLine(
+            "To fix this, verify the query parameter name matches what's in the actual request, "
+                + "or check if query parameters are being set in the Kiota request configuration."
+        );
+
+        throw new KeyNotFoundException(errorMessage.ToString());
+    }
 }

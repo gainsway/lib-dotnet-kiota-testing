@@ -431,4 +431,247 @@ public class RequestInformationExtensionsTests
     }
 
     #endregion
+
+    #region Query Parameter Extension Tests
+
+    [Test]
+    public void TryGetQueryParameter_WithExactMatch_ShouldReturnTrue()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("select", "id,name");
+
+        // Act
+        var result = requestInfo.TryGetQueryParameter("select", out var value);
+
+        // Assert
+        Assert.That(result, Is.True);
+        Assert.That(value, Is.EqualTo("id,name"));
+    }
+
+    [Test]
+    public void TryGetQueryParameter_WithODataStyle_ShouldReturnTrue()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("$select", "id,name");
+
+        // Act
+        var result = requestInfo.TryGetQueryParameter("select", out var value);
+
+        // Assert
+        Assert.That(result, Is.True);
+        Assert.That(value, Is.EqualTo("id,name"));
+    }
+
+    [Test]
+    public void TryGetQueryParameter_WithUrlEncodedODataStyle_ShouldReturnTrue()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("%24select", "id,name");
+
+        // Act
+        var result = requestInfo.TryGetQueryParameter("select", out var value);
+
+        // Assert
+        Assert.That(result, Is.True);
+        Assert.That(value, Is.EqualTo("id,name"));
+    }
+
+    [Test]
+    public void TryGetQueryParameter_WithKebabCase_ShouldReturnTrue()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("order-by", "name");
+
+        // Act
+        var result = requestInfo.TryGetQueryParameter("orderBy", out var value);
+
+        // Assert
+        Assert.That(result, Is.True);
+        Assert.That(value, Is.EqualTo("name"));
+    }
+
+    [Test]
+    public void TryGetQueryParameter_WithPascalCase_ShouldReturnTrue()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("OrderBy", "name");
+
+        // Act
+        var result = requestInfo.TryGetQueryParameter("orderBy", out var value);
+
+        // Assert
+        Assert.That(result, Is.True);
+        Assert.That(value, Is.EqualTo("name"));
+    }
+
+    [Test]
+    public void TryGetQueryParameter_WithNotFound_ShouldReturnFalse()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("select", "id,name");
+
+        // Act
+        var result = requestInfo.TryGetQueryParameter("filter", out var value);
+
+        // Assert
+        Assert.That(result, Is.False);
+        Assert.That(value, Is.Null);
+    }
+
+    [Test]
+    public void TryGetQueryParameter_WithNullRequestInfo_ShouldReturnFalse()
+    {
+        // Arrange
+        RequestInformation? requestInfo = null;
+
+        // Act
+        var result = requestInfo.TryGetQueryParameter("select", out var value);
+
+        // Assert
+        Assert.That(result, Is.False);
+        Assert.That(value, Is.Null);
+    }
+
+    [Test]
+    public void GetQueryParameter_WithExactMatch_ShouldReturnValue()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("select", "id,name");
+
+        // Act
+        var value = requestInfo.GetQueryParameter("select");
+
+        // Assert
+        Assert.That(value, Is.EqualTo("id,name"));
+    }
+
+    [Test]
+    public void GetQueryParameter_WithODataStyle_ShouldReturnValue()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("$filter", "status eq 'active'");
+
+        // Act
+        var value = requestInfo.GetQueryParameter("filter");
+
+        // Assert
+        Assert.That(value, Is.EqualTo("status eq 'active'"));
+    }
+
+    [Test]
+    public void GetQueryParameter_WithNotFound_ShouldThrowKeyNotFoundException()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("select", "id,name");
+
+        // Act & Assert
+        var ex = Assert.Throws<KeyNotFoundException>(() => requestInfo.GetQueryParameter("filter"));
+
+        // Verify error message is helpful
+        Assert.That(ex?.Message, Does.Contain("filter"));
+        Assert.That(ex?.Message, Does.Contain("not found"));
+        Assert.That(ex?.Message, Does.Contain("Tried the following naming variations"));
+        Assert.That(ex?.Message, Does.Contain("Available query parameter keys"));
+        Assert.That(ex?.Message, Does.Contain("select"));
+    }
+
+    [Test]
+    public void GetQueryParameter_WithNoQueryParameters_ShouldThrowKeyNotFoundException()
+    {
+        // Arrange
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        // Don't add any query parameters
+
+        // Act & Assert
+        var ex = Assert.Throws<KeyNotFoundException>(() => requestInfo.GetQueryParameter("select"));
+
+        // Verify error message indicates no query parameters
+        Assert.That(ex?.Message, Does.Contain("none - no query parameters"));
+    }
+
+    [Test]
+    public void GetQueryParameter_WithMultipleNamingConventions_ShouldFindCorrectOne()
+    {
+        // Arrange - Test multiple query parameters with different naming conventions
+        var requestInfo = new RequestInformation { UrlTemplate = "/api/test" };
+        requestInfo.QueryParameters.Add("$select", "id,name");
+        requestInfo.QueryParameters.Add("order-by", "name");
+        requestInfo.QueryParameters.Add("PageSize", "10");
+
+        // Act
+        var selectValue = requestInfo.GetQueryParameter("select");
+        var orderByValue = requestInfo.GetQueryParameter("orderBy");
+        var pageSizeValue = requestInfo.GetQueryParameter("pageSize");
+
+        // Assert
+        Assert.That(selectValue, Is.EqualTo("id,name"));
+        Assert.That(orderByValue, Is.EqualTo("name"));
+        Assert.That(pageSizeValue, Is.EqualTo("10"));
+    }
+
+    [Test]
+    public void GetQueryParameter_InPredicateWithODataParameter_ShouldWork()
+    {
+        // Arrange - Simulate real-world usage in a predicate
+        var requestInfo = new RequestInformation
+        {
+            HttpMethod = Method.GET,
+            UrlTemplate = "/api/items{?$select,$filter}",
+        };
+        requestInfo.QueryParameters.Add("$select", "id,name");
+        requestInfo.QueryParameters.Add("$filter", "status eq 'active'");
+
+        // Act - Use in a predicate like you would in mock setup
+        Func<RequestInformation, bool> predicate = req =>
+            req.HttpMethod == Method.GET
+            && req.GetQueryParameter("select").ToString() == "id,name"
+            && req.GetQueryParameter("filter").ToString() == "status eq 'active'";
+
+        var result = predicate(requestInfo);
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void TryGetQueryParameter_InPredicateWithMissingParameter_ShouldReturnFalse()
+    {
+        // Arrange - Simulate checking if optional parameter exists
+        var requestInfo = new RequestInformation
+        {
+            HttpMethod = Method.GET,
+            UrlTemplate = "/api/items{?$select}",
+        };
+        requestInfo.QueryParameters.Add("$select", "id,name");
+        // Don't add $filter parameter
+
+        // Act - Use in a predicate with optional parameter checking
+        Func<RequestInformation, bool> predicate = req =>
+        {
+            // Check required parameter
+            if (!req.TryGetQueryParameter("select", out var selectValue))
+                return false;
+
+            // Check optional parameter - should not fail if missing
+            var hasFilter = req.TryGetQueryParameter("filter", out var filterValue);
+
+            return selectValue.ToString() == "id,name" && !hasFilter;
+        };
+
+        var result = predicate(requestInfo);
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    #endregion
 }

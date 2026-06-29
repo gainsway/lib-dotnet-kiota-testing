@@ -19,9 +19,9 @@ jobs:
     with:
       dotnet-version: 10.0.x
     secrets: inherit
-  permissions:
-    contents: read
-    packages: write
+    permissions:
+      contents: read
+      packages: write
     
   publish-nuget-org:
     name: Publish NuGet.org

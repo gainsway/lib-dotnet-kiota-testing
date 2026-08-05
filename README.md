@@ -32,13 +32,14 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
       - [Mocking Null/Empty Responses](#mocking-nullempty-responses)
     - [9. Verify Requests Were Sent](#9-verify-requests-were-sent)
       - [Specifying Call Counts with `Times`](#specifying-call-counts-with-times)
+      - [Verifying Each HTTP Verb](#verifying-each-http-verb)
       - [Verification Is Scoped to Path Parameters](#verification-is-scoped-to-path-parameters)
       - [Verifying Additional Request Details](#verifying-additional-request-details)
       - [Explicit Type Arguments](#explicit-type-arguments)
   - [🧪 Complete Test Example](#-complete-test-example)
   - [� API Reference - Type-Safe Extensions](#-api-reference---type-safe-extensions)
     - [`MockGetAsync<TBuilder, TResponse>()`](#mockgetasynctbuilder-tresponse)
-    - [`VerifyGetAsync<TBuilder, TResponse>()`](#verifygetasynctbuilder-tresponse)
+    - [`Verify*` Methods](#verify-methods)
     - [`Times`](#times)
     - [`MockGetAsync<TBuilder>(string)`](#mockgetasynctbuilderstring)
     - [`MockGetCollectionAsync<TBuilder, TResponse>()`](#mockgetcollectionasynctbuilder-tresponse)
@@ -452,6 +453,39 @@ await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(
 
 An `int` converts implicitly, so `VerifyGetAsync<...>(3)` is shorthand for `Times.Exactly(3)`. Prefer the named values for the common cases — they read more clearly at the call site.
 
+#### Verifying Each HTTP Verb
+
+Every `Mock*` method has a matching `Verify*` counterpart:
+
+```csharp
+// GET single object
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
+
+// GET string/primitive - only the builder type argument
+await mockClient.Api.Status.VerifyGetAsync<StatusRequestBuilder>(Times.Once);
+
+// GET collection
+await mockClient.Api.Funds[fundId].Activities
+    .VerifyGetCollectionAsync<ActivitiesRequestBuilder, Activity>(Times.Once);
+
+// POST
+await mockClient.Api.Funds.VerifyPostAsync<FundsRequestBuilder, Fund>(Times.Once);
+await mockClient.Api.Funds.VerifyPostCollectionAsync<FundsRequestBuilder, Fund>(Times.Once);
+
+// PUT / PATCH
+await mockClient.Api.Funds[fundId].VerifyPutAsync<FundItemRequestBuilder, Fund>(Times.Once);
+await mockClient.Api.Funds[fundId].VerifyPatchAsync<FundItemRequestBuilder, Fund>(Times.Once);
+
+// DELETE no content - no response type argument
+await mockClient.Api.Funds[fundId].VerifyDeleteAsync(Times.Once);
+
+// DELETE returning a body
+await mockClient.Api.Funds[fundId].VerifyDeleteAsync<FundItemRequestBuilder, Fund>(Times.Once);
+await mockClient.Api.Funds.VerifyDeleteCollectionAsync<FundsRequestBuilder, Fund>(Times.Once);
+```
+
+Verification matches on HTTP method as well as URL, so a `PATCH` to an endpoint never satisfies a `VerifyPutAsync` on the same URL.
+
 #### Verification Is Scoped to Path Parameters
 
 Each builder carries its own path parameters, so verification distinguishes between IDs automatically:
@@ -642,9 +676,24 @@ _client.Api.Funds[fundId].MockGetAsync(
 
 ---
 
-### `VerifyGetAsync<TBuilder, TResponse>()`
+### `Verify*` Methods
 
-Verifies that a GET request returning a single object (IParsable) was sent to this endpoint the expected number of times.
+Every `Mock*` method has a matching `Verify*` counterpart that asserts the endpoint was called.
+
+| Method | Verifies | Pairs with |
+|---|---|---|
+| `VerifyGetAsync<TBuilder, TResponse>()` | GET returning a single object | `MockGetAsync` |
+| `VerifyGetAsync<TBuilder>()` | GET returning a string/primitive | `MockGetAsync(string)` |
+| `VerifyGetCollectionAsync<TBuilder, TResponse>()` | GET returning a collection | `MockGetCollectionAsync` |
+| `VerifyPostAsync<TBuilder, TResponse>()` | POST returning a single object | `MockPostAsync` |
+| `VerifyPostCollectionAsync<TBuilder, TResponse>()` | POST returning a collection | `MockPostCollectionAsync` |
+| `VerifyPutAsync<TBuilder, TResponse>()` | PUT returning a single object | `MockPutAsync` |
+| `VerifyPatchAsync<TBuilder, TResponse>()` | PATCH returning a single object | `MockPatchAsync` |
+| `VerifyDeleteAsync<TBuilder>()` | DELETE returning no content | `MockDeleteAsync()` |
+| `VerifyDeleteAsync<TBuilder, TResponse>()` | DELETE returning a single object | `MockDeleteAsync(response)` |
+| `VerifyDeleteCollectionAsync<TBuilder, TResponse>()` | DELETE returning a collection | `MockDeleteCollectionAsync` |
+
+All of them share the same signature:
 
 **Parameters:**
 - `times` (Times, optional) - The expected number of calls. Defaults to `Times.AtLeastOnce`. See [Specifying Call Counts with `Times`](#specifying-call-counts-with-times).
@@ -653,6 +702,8 @@ Verifies that a GET request returning a single object (IParsable) was sent to th
 **Returns:** A `Task` that must be awaited
 
 **Throws:** `ReceivedCallsException` when the actual call count does not match `times`
+
+**Matching:** URL template, path parameter values, and HTTP method must all match the request builder the method is called on.
 
 **Example:**
 ```csharp
@@ -678,7 +729,7 @@ await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(
 );
 ```
 
-> **Note:** Both type arguments are required — there is no response value for the compiler to infer them from.
+> **Note:** Type arguments are required — there is no response value for the compiler to infer them from. The exceptions are `VerifyGetAsync<TBuilder>` (primitive) and `VerifyDeleteAsync<TBuilder>` (no content), which take only the builder type.
 
 ---
 

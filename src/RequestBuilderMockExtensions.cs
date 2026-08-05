@@ -958,6 +958,70 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Verifies that a GET request returning a single object (IParsable) was sent to this
+    /// endpoint the expected number of times.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="times">
+    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>, which
+    /// asserts the endpoint was called at least once without pinning an exact count.
+    /// Use <see cref="Times.Never"/> to assert it was never called.
+    /// </param>
+    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
+    /// <returns>A task that completes once the assertion has been evaluated.</returns>
+    /// <remarks>
+    /// This must be awaited. NSubstitute evaluates the assertion when the returned task is
+    /// created, but leaving it unawaited produces a compiler warning and can mask failures.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var fundId = Guid.NewGuid();
+    /// _client.Api.Funds[fundId].MockGetAsync(fund);
+    ///
+    /// await _service.GetFundAsync(fundId);
+    ///
+    /// // Called at least once - type-safe, no URL strings!
+    /// await _client.Api.Funds[fundId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;();
+    ///
+    /// // Exact counts
+    /// await _client.Api.Funds[fundId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Once);
+    /// await _client.Api.Funds[fundId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Exactly(3));
+    ///
+    /// // Assert an endpoint was never called
+    /// await _client.Api.Funds[otherId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Never);
+    /// </code>
+    /// </example>
+    public static async Task VerifyGetAsync<TBuilder, TResponse>(
+        this TBuilder requestBuilder,
+        Times? times = null,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+        where TResponse : IParsable
+    {
+        times ??= Times.AtLeastOnce;
+
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        var received = times.Count is int exactCount
+            ? mockAdapter.Received(exactCount)
+            : mockAdapter.Received();
+
+        await received.SendAsync<TResponse>(
+            Arg.Is<RequestInformation>(req =>
+                MatchesBuilder(req, urlTemplate, pathParameters, Method.GET)
+                && (requestInfoPredicate == null || requestInfoPredicate(req))
+            ),
+            Arg.Any<ParsableFactory<TResponse>>(),
+            Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+            Arg.Any<CancellationToken>()
+        );
+    }
+
+    /// <summary>
     /// Gets the mock IRequestAdapter from a request builder using reflection.
     /// </summary>
     private static IRequestAdapter GetMockAdapter(BaseRequestBuilder requestBuilder)

@@ -30,9 +30,16 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
       - [Multiple Mocks for Same Endpoint](#multiple-mocks-for-same-endpoint)
       - [Nested Resource Paths](#nested-resource-paths)
       - [Mocking Null/Empty Responses](#mocking-nullempty-responses)
+    - [9. Verify Requests Were Sent](#9-verify-requests-were-sent)
+      - [Specifying Call Counts with `Times`](#specifying-call-counts-with-times)
+      - [Verification Is Scoped to Path Parameters](#verification-is-scoped-to-path-parameters)
+      - [Verifying Additional Request Details](#verifying-additional-request-details)
+      - [Explicit Type Arguments](#explicit-type-arguments)
   - [🧪 Complete Test Example](#-complete-test-example)
   - [� API Reference - Type-Safe Extensions](#-api-reference---type-safe-extensions)
     - [`MockGetAsync<TBuilder, TResponse>()`](#mockgetasynctbuilder-tresponse)
+    - [`VerifyGetAsync<TBuilder, TResponse>()`](#verifygetasynctbuilder-tresponse)
+    - [`Times`](#times)
     - [`MockGetAsync<TBuilder>(string)`](#mockgetasynctbuilderstring)
     - [`MockGetCollectionAsync<TBuilder, TResponse>()`](#mockgetcollectionasynctbuilder-tresponse)
     - [`MockPostAsync<TBuilder, TResponse>()`](#mockpostasynctbuilder-tresponse)
@@ -400,6 +407,86 @@ mockClient.Api.Activities.MockGetCollectionAsync(new List<Activity>());
 
 ---
 
+### 9. Verify Requests Were Sent
+
+Mocking sets up a response; **verification** asserts your code actually called the endpoint. Use `VerifyGetAsync` with the same type-safe builder syntax — no URL strings.
+
+```csharp
+var fundId = Guid.NewGuid();
+mockClient.Api.Funds[fundId].MockGetAsync(expectedFund);
+
+// Act
+await service.GetFundAsync(fundId);
+
+// Assert the endpoint was called at least once
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
+```
+
+> ⚠️ **You must `await` the verification.** Leaving it unawaited means the assertion never runs and the test silently passes.
+
+#### Specifying Call Counts with `Times`
+
+By default — with no argument — verification asserts the endpoint was called **at least once**, matching NSubstitute's bare `Received()`. Use `Times` when you need an exact count:
+
+```csharp
+// At least once (the default)
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.AtLeastOnce);
+
+// Exactly once
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
+
+// Never called
+await mockClient.Api.Funds[otherId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Never);
+
+// An exact number of calls
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Exactly(3));
+```
+
+| Value | Meaning | NSubstitute equivalent |
+|---|---|---|
+| *(omitted)* / `Times.AtLeastOnce` | Called one or more times | `Received()` |
+| `Times.Once` | Called exactly once | `Received(1)` |
+| `Times.Never` | Never called | `DidNotReceive()` |
+| `Times.Exactly(n)` | Called exactly `n` times | `Received(n)` |
+
+An `int` converts implicitly, so `VerifyGetAsync<...>(3)` is shorthand for `Times.Exactly(3)`. Prefer the named values for the common cases — they read more clearly at the call site.
+
+#### Verification Is Scoped to Path Parameters
+
+Each builder carries its own path parameters, so verification distinguishes between IDs automatically:
+
+```csharp
+await service.GetFundAsync(calledId);
+
+await mockClient.Api.Funds[calledId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
+await mockClient.Api.Funds[otherId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Never);
+```
+
+#### Verifying Additional Request Details
+
+Pass a predicate to assert on headers, query parameters, or any other part of the request:
+
+```csharp
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(
+    Times.Once,
+    req => req.Headers.ContainsKey("Authorization")
+);
+```
+
+#### Explicit Type Arguments
+
+Unlike the `Mock*` methods, `VerifyGetAsync` has no response value to infer types from, so both type arguments must be supplied: the builder type and the response type.
+
+```csharp
+//                                        builder type          response type
+await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
+```
+
+When the count doesn't match, NSubstitute throws a `ReceivedCallsException` describing the expected and actual calls.
+
+---
+
 ## 🧪 Complete Test Example
 
 Here's a full test demonstrating the type-safe extensions:
@@ -552,6 +639,61 @@ _client.Api.Funds[fundId].MockGetAsync(
     req => req.Headers.ContainsKey("Authorization")
 );
 ```
+
+---
+
+### `VerifyGetAsync<TBuilder, TResponse>()`
+
+Verifies that a GET request returning a single object (IParsable) was sent to this endpoint the expected number of times.
+
+**Parameters:**
+- `times` (Times, optional) - The expected number of calls. Defaults to `Times.AtLeastOnce`. See [Specifying Call Counts with `Times`](#specifying-call-counts-with-times).
+- `requestInfoPredicate` (optional) - Additional conditions the request must match
+
+**Returns:** A `Task` that must be awaited
+
+**Throws:** `ReceivedCallsException` when the actual call count does not match `times`
+
+**Example:**
+```csharp
+var fundId = Guid.NewGuid();
+_client.Api.Funds[fundId].MockGetAsync(fund);
+
+await _service.GetFundAsync(fundId);
+
+// At least once
+await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
+
+// Exact counts
+await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
+await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Exactly(3));
+
+// Never called
+await _client.Api.Funds[otherId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Never);
+
+// With conditions
+await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(
+    Times.Once,
+    req => req.Headers.ContainsKey("Authorization")
+);
+```
+
+> **Note:** Both type arguments are required — there is no response value for the compiler to infer them from.
+
+---
+
+### `Times`
+
+Specifies the number of calls expected by a `Verify*` assertion.
+
+| Member | Meaning |
+|---|---|
+| `Times.AtLeastOnce` | Called one or more times (the default) |
+| `Times.Once` | Called exactly once |
+| `Times.Never` | Never called |
+| `Times.Exactly(n)` | Called exactly `n` times; throws `ArgumentOutOfRangeException` if `n` is negative |
+
+An `int` converts implicitly to `Times.Exactly(n)`.
 
 ---
 

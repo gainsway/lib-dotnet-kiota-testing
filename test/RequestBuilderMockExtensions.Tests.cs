@@ -1,6 +1,7 @@
 using Gainsway.Kiota.Testing;
 using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Serialization;
+using NSubstitute.Exceptions;
 using NUnit.Framework;
 
 namespace Gainsway.Kiota.Testing.Tests;
@@ -35,6 +36,167 @@ public class RequestBuilderMockExtensionsTests
         Assert.Pass(
             "Mock setup successful using type-safe API: _mockClient.Api.Items[itemId].MockGetAsync(response)"
         );
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WhenEndpointWasCalled_ShouldPass()
+    {
+        // Arrange
+        var itemId = "123";
+        var expectedResponse = new TestResponse { Value = "test-value" };
+        _mockClient.Api.Items[itemId].MockGetAsync(expectedResponse);
+
+        // Act
+        var result = await _mockClient.Api.Items[itemId].GetAsync();
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value, Is.EqualTo("test-value"));
+
+        await _mockClient
+            .Api.Items[itemId]
+            .VerifyGetAsync<ItemRequestBuilder, TestResponse>(Times.Once);
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WithNoTimesArgument_ShouldAssertAtLeastOnce()
+    {
+        // Arrange
+        var itemId = "123";
+        _mockClient.Api.Items[itemId].MockGetAsync(new TestResponse { Value = "test-value" });
+
+        // Act - called twice
+        await _mockClient.Api.Items[itemId].GetAsync();
+        await _mockClient.Api.Items[itemId].GetAsync();
+
+        // Assert - default is "at least once", so two calls satisfy it
+        await _mockClient.Api.Items[itemId].VerifyGetAsync<ItemRequestBuilder, TestResponse>();
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WithNoTimesArgument_ShouldThrowWhenNeverCalled()
+    {
+        // Arrange
+        var itemId = "123";
+        _mockClient.Api.Items[itemId].MockGetAsync(new TestResponse { Value = "test-value" });
+
+        // Act - deliberately no call
+
+        // Assert - "at least once" must fail when there were no calls
+        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+            await _mockClient.Api.Items[itemId].VerifyGetAsync<ItemRequestBuilder, TestResponse>()
+        );
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WithTimesNever_ShouldPassWhenNotCalled()
+    {
+        // Arrange
+        var itemId = "123";
+        _mockClient.Api.Items[itemId].MockGetAsync(new TestResponse { Value = "test-value" });
+
+        // Act - deliberately no call
+
+        // Assert
+        await _mockClient
+            .Api.Items[itemId]
+            .VerifyGetAsync<ItemRequestBuilder, TestResponse>(Times.Never);
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WithTimesNever_ShouldThrowWhenCalled()
+    {
+        // Arrange
+        var itemId = "123";
+        _mockClient.Api.Items[itemId].MockGetAsync(new TestResponse { Value = "test-value" });
+
+        // Act
+        await _mockClient.Api.Items[itemId].GetAsync();
+
+        // Assert
+        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+            await _mockClient
+                .Api.Items[itemId]
+                .VerifyGetAsync<ItemRequestBuilder, TestResponse>(Times.Never)
+        );
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WithTimesExactly_ShouldMatchCallCount()
+    {
+        // Arrange
+        var itemId = "123";
+        _mockClient.Api.Items[itemId].MockGetAsync(new TestResponse { Value = "test-value" });
+
+        // Act - called three times
+        await _mockClient.Api.Items[itemId].GetAsync();
+        await _mockClient.Api.Items[itemId].GetAsync();
+        await _mockClient.Api.Items[itemId].GetAsync();
+
+        // Assert
+        await _mockClient
+            .Api.Items[itemId]
+            .VerifyGetAsync<ItemRequestBuilder, TestResponse>(Times.Exactly(3));
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WithIntLiteral_ShouldConvertToExactCount()
+    {
+        // Arrange
+        var itemId = "123";
+        _mockClient.Api.Items[itemId].MockGetAsync(new TestResponse { Value = "test-value" });
+
+        // Act
+        await _mockClient.Api.Items[itemId].GetAsync();
+        await _mockClient.Api.Items[itemId].GetAsync();
+
+        // Assert - implicit int conversion keeps arbitrary counts terse
+        await _mockClient.Api.Items[itemId].VerifyGetAsync<ItemRequestBuilder, TestResponse>(2);
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_WhenCallCountDiffers_ShouldThrow()
+    {
+        // Arrange
+        var itemId = "123";
+        _mockClient.Api.Items[itemId].MockGetAsync(new TestResponse { Value = "test-value" });
+
+        // Act - called once
+        await _mockClient.Api.Items[itemId].GetAsync();
+
+        // Assert - expecting two calls must fail, proving the assertion is real
+        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+            await _mockClient
+                .Api.Items[itemId]
+                .VerifyGetAsync<ItemRequestBuilder, TestResponse>(Times.Exactly(2))
+        );
+    }
+
+    [Test]
+    public void Times_Exactly_WithNegativeCount_ShouldThrow()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Times.Exactly(-1));
+    }
+
+    [Test]
+    public async Task VerifyGetAsync_ShouldDistinguishBetweenPathParameters()
+    {
+        // Arrange
+        var calledId = "123";
+        var otherId = "456";
+        _mockClient.Api.Items[calledId].MockGetAsync(new TestResponse { Value = "called" });
+        _mockClient.Api.Items[otherId].MockGetAsync(new TestResponse { Value = "other" });
+
+        // Act - only one of the two endpoints is called
+        await _mockClient.Api.Items[calledId].GetAsync();
+
+        // Assert - verification is scoped to the exact path parameter
+        await _mockClient
+            .Api.Items[calledId]
+            .VerifyGetAsync<ItemRequestBuilder, TestResponse>(Times.Once);
+        await _mockClient
+            .Api.Items[otherId]
+            .VerifyGetAsync<ItemRequestBuilder, TestResponse>(Times.Never);
     }
 
     [Test]
@@ -370,6 +532,30 @@ public class ItemRequestBuilder : BaseRequestBuilder
             "{+baseurl}/api/items/{id}",
             new Dictionary<string, object> { { "id", id } }
         ) { }
+
+    /// <summary>
+    /// Sends a GET request, mirroring how a Kiota-generated builder calls the adapter.
+    /// </summary>
+    public async Task<TestResponse?> GetAsync(CancellationToken cancellationToken = default)
+    {
+        var requestInfo = new RequestInformation
+        {
+            HttpMethod = Method.GET,
+            UrlTemplate = UrlTemplate,
+        };
+
+        foreach (var param in PathParameters)
+        {
+            requestInfo.PathParameters.Add(param.Key, param.Value);
+        }
+
+        return await RequestAdapter.SendAsync(
+            requestInfo,
+            TestResponse.CreateFromDiscriminatorValue,
+            default,
+            cancellationToken
+        );
+    }
 }
 
 /// <summary>

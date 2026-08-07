@@ -3,6 +3,8 @@
 A testing library that simplifies mocking [Kiota-generated](https://learn.microsoft.com/en-us/openapi/kiota/overview) API clients for unit tests using NSubstitute.
 [![NuGet](https://img.shields.io/nuget/v/Gainsway.Kiota.Testing.svg)](https://www.nuget.org/packages/Gainsway.Kiota.Testing/)
 
+> **Upgrading?** The legacy string/URL-based mocking API has been removed. See [MIGRATION.md](MIGRATION.md) if your tests still call `MockClientResponse`, `MockClientCollectionResponse`, `MockClientNoContentResponse`, their exception variants, or `GetUrlTemplate()`, or if you use `Verify*Async` with explicit type arguments.
+
 ## 📋 Table of Contents
 
 - [Gainsway.Kiota.Testing](#gainswaykiotatesting)
@@ -36,10 +38,12 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
       - [Verification Is Scoped to Path Parameters](#verification-is-scoped-to-path-parameters)
       - [Verifying Additional Request Details](#verifying-additional-request-details)
       - [Explicit Type Arguments](#explicit-type-arguments)
+      - [Verifying the Request Body](#verifying-the-request-body)
   - [🧪 Complete Test Example](#-complete-test-example)
   - [� API Reference - Type-Safe Extensions](#-api-reference---type-safe-extensions)
     - [`MockGetAsync<TBuilder, TResponse>()`](#mockgetasynctbuilder-tresponse)
     - [`Verify*` Methods](#verify-methods)
+    - [`VerifyCallAssertion.WithBody<TBody>()`](#verifycallassertionwithbodytbody)
     - [`Times`](#times)
     - [`MockGetAsync<TBuilder>(string)`](#mockgetasynctbuilderstring)
     - [`MockGetCollectionAsync<TBuilder, TResponse>()`](#mockgetcollectionasynctbuilder-tresponse)
@@ -50,28 +54,12 @@ A testing library that simplifies mocking [Kiota-generated](https://learn.micros
     - [`MockGetAsyncException<TBuilder, TResponse>()`](#mockgetasyncexceptiontbuilder-tresponse)
     - [`MockGetCollectionAsyncException<TBuilder, TResponse>()`](#mockgetcollectionasyncexceptiontbuilder-tresponse)
     - [`MockDeleteAsyncException<TBuilder>()`](#mockdeleteasyncexceptiontbuilder)
-  - [� Legacy API Reference - URL-Based Mocking](#-legacy-api-reference---url-based-mocking)
-    - [Overview](#overview)
-    - [`GetMockableClient<T>()`](#getmockableclientt)
-    - [`MockClientResponse<T, R>()`](#mockclientresponset-r)
-    - [`MockClientCollectionResponse<T, R>()`](#mockclientcollectionresponset-r)
-    - [`MockClientNoContentResponse<T>()`](#mockclientnocontentresponset)
-    - [`MockClientResponseException<T, R>()`](#mockclientresponseexceptiont-r)
-    - [`MockClientCollectionResponseException<T, R>()`](#mockclientcollectionresponseexceptiont-r)
-    - [`MockClientNoContentResponseException<T>()`](#mockclientnocontentresponseexceptiont)
-    - [Legacy API Usage Notes](#legacy-api-usage-notes)
-      - [URL Pattern Matching](#url-pattern-matching)
-      - [Smart Parameter Access](#smart-parameter-access)
-      - [Query Parameters](#query-parameters)
-      - [Multiple Path Parameters](#multiple-path-parameters)
   - [🔍 Troubleshooting](#-troubleshooting)
     - [Mock Not Matching / Returning Null](#mock-not-matching--returning-null)
     - [Advanced Debugging](#advanced-debugging)
-      - [Check URL Template (Legacy API)](#check-url-template-legacy-api)
       - [KeyNotFoundException with GetPathParameter](#keynotfoundexception-with-getpathparameter)
       - [Test Fails After Regenerating Kiota Client](#test-fails-after-regenerating-kiota-client)
     - [Finding Parameter Names for Complex Nested Paths](#finding-parameter-names-for-complex-nested-paths)
-    - [Using GetUrlTemplate() Helper](#using-geturltemplate-helper)
   - [🔧 Advanced: Manual Mocking Without Extensions](#-advanced-manual-mocking-without-extensions)
     - [Use Case: Accepting Any Path Parameter Value](#use-case-accepting-any-path-parameter-value)
     - [Manual Mocking Pattern](#manual-mocking-pattern)
@@ -213,6 +201,10 @@ mockClient.Api.Funds.MockPostAsync(
     createdFund,
     req => req.Content != null
 );
+
+// Mock a POST that returns no content (common for action/status-transition
+// endpoints — a bare [HttpPost] returning IActionResult/ActionResult with no body)
+mockClient.Api.Funds[fundId].Status.MarkSetupComplete.MockPostAsync();
 ```
 
 ---
@@ -236,6 +228,10 @@ mockClient.Api.Funds[fundId].MockPutAsync(
     req => req.Content != null
         && req.Headers.ContainsKey("If-Match")
 );
+
+// Mock a PUT that returns no content (common for a fire-and-forget replication
+// write between services, where there's nothing to hand back)
+mockClient.ApiInternal.Funds[fundId].MockPutAsync();
 ```
 
 ---
@@ -252,6 +248,10 @@ var patchedFund = new Fund
 
 // Mock PATCH response
 mockClient.Api.Funds[fundId].MockPatchAsync(patchedFund);
+
+// Mock a PATCH that returns no content (the common case for partial-update
+// endpoints backed by a bare [HttpPatch] returning IActionResult/ActionResult)
+mockClient.Api.FundApplications["self"][id].MockPatchAsync();
 ```
 
 ---
@@ -410,7 +410,7 @@ mockClient.Api.Activities.MockGetCollectionAsync(new List<Activity>());
 
 ### 9. Verify Requests Were Sent
 
-Mocking sets up a response; **verification** asserts your code actually called the endpoint. Use `VerifyGetAsync` with the same type-safe builder syntax — no URL strings.
+Mocking sets up a response; **verification** asserts your code actually called the endpoint. Use `VerifyGetAsync` with the same type-safe builder syntax — no URL strings, and no response type argument either: verification matches a call regardless of whether the endpoint returns a single object, a collection, a primitive, or no content at all.
 
 ```csharp
 var fundId = Guid.NewGuid();
@@ -420,7 +420,7 @@ mockClient.Api.Funds[fundId].MockGetAsync(expectedFund);
 await service.GetFundAsync(fundId);
 
 // Assert the endpoint was called at least once
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
+await mockClient.Api.Funds[fundId].VerifyGetAsync();
 ```
 
 > ⚠️ **You must `await` the verification.** Leaving it unawaited means the assertion never runs and the test silently passes.
@@ -431,17 +431,17 @@ By default — with no argument — verification asserts the endpoint was called
 
 ```csharp
 // At least once (the default)
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.AtLeastOnce);
+await mockClient.Api.Funds[fundId].VerifyGetAsync();
+await mockClient.Api.Funds[fundId].VerifyGetAsync(Times.AtLeastOnce);
 
 // Exactly once
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
+await mockClient.Api.Funds[fundId].VerifyGetAsync(Times.Once);
 
 // Never called
-await mockClient.Api.Funds[otherId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Never);
+await mockClient.Api.Funds[otherId].VerifyGetAsync(Times.Never);
 
 // An exact number of calls
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Exactly(3));
+await mockClient.Api.Funds[fundId].VerifyGetAsync(Times.Exactly(3));
 ```
 
 | Value | Meaning | NSubstitute equivalent |
@@ -451,40 +451,35 @@ await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(
 | `Times.Never` | Never called | `DidNotReceive()` |
 | `Times.Exactly(n)` | Called exactly `n` times | `Received(n)` |
 
-An `int` converts implicitly, so `VerifyGetAsync<...>(3)` is shorthand for `Times.Exactly(3)`. Prefer the named values for the common cases — they read more clearly at the call site.
+An `int` converts implicitly, so `VerifyGetAsync(3)` is shorthand for `Times.Exactly(3)`. Prefer the named values for the common cases — they read more clearly at the call site.
 
 #### Verifying Each HTTP Verb
 
-Every `Mock*` method has a matching `Verify*` counterpart:
+There's exactly one `Verify*Async` method per verb — `VerifyGetAsync`, `VerifyPostAsync`, `VerifyPutAsync`, `VerifyPatchAsync`, `VerifyDeleteAsync` — and each one matches the call no matter what response shape the real endpoint turns out to have:
 
 ```csharp
-// GET single object
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
+// GET - matches a single object, a collection, or a primitive response
+await mockClient.Api.Funds[fundId].VerifyGetAsync(Times.Once);
+await mockClient.Api.Status.VerifyGetAsync(Times.Once);
+await mockClient.Api.Funds[fundId].Activities.VerifyGetAsync(Times.Once);
 
-// GET string/primitive - only the builder type argument
-await mockClient.Api.Status.VerifyGetAsync<StatusRequestBuilder>(Times.Once);
+// POST - matches a created-resource response or a bare action/status-transition endpoint
+await mockClient.Api.Funds.VerifyPostAsync(Times.Once);
+await mockClient.Api.Funds[fundId].Status.MarkSetupComplete.VerifyPostAsync(Times.Once);
 
-// GET collection
-await mockClient.Api.Funds[fundId].Activities
-    .VerifyGetCollectionAsync<ActivitiesRequestBuilder, Activity>(Times.Once);
+// PUT / PATCH - matches a returned resource or a no-content replication/partial-update write
+await mockClient.Api.Funds[fundId].VerifyPutAsync(Times.Once);
+await mockClient.ApiInternal.Funds[fundId].VerifyPutAsync(Times.Once);
+await mockClient.Api.FundApplications["self"][id].VerifyPatchAsync(Times.Once);
 
-// POST
-await mockClient.Api.Funds.VerifyPostAsync<FundsRequestBuilder, Fund>(Times.Once);
-await mockClient.Api.Funds.VerifyPostCollectionAsync<FundsRequestBuilder, Fund>(Times.Once);
-
-// PUT / PATCH
-await mockClient.Api.Funds[fundId].VerifyPutAsync<FundItemRequestBuilder, Fund>(Times.Once);
-await mockClient.Api.Funds[fundId].VerifyPatchAsync<FundItemRequestBuilder, Fund>(Times.Once);
-
-// DELETE no content - no response type argument
+// DELETE - matches no content, a returned object, or a bulk-delete collection
 await mockClient.Api.Funds[fundId].VerifyDeleteAsync(Times.Once);
-
-// DELETE returning a body
-await mockClient.Api.Funds[fundId].VerifyDeleteAsync<FundItemRequestBuilder, Fund>(Times.Once);
-await mockClient.Api.Funds.VerifyDeleteCollectionAsync<FundsRequestBuilder, Fund>(Times.Once);
+await mockClient.Api.Funds.VerifyDeleteAsync(Times.Once);
 ```
 
 Verification matches on HTTP method as well as URL, so a `PATCH` to an endpoint never satisfies a `VerifyPutAsync` on the same URL.
+
+This matters because response shape is a real, common split for every verb — not just an edge case. A fire-and-forget replication `PUT`, an action/status-transition `POST` (`MarkSetupComplete`, `activate`, `suspend`), and a partial-update `PATCH` backed by a bare `ActionResult` all return no content, right alongside endpoints on the same verb that return a resource. `VerifyPutAsync` (etc.) doesn't ask which one your endpoint is — it looks at what call was actually recorded and checks the count against that, whichever `IRequestAdapter` member (`SendAsync<T>`, `SendCollectionAsync<T>`, `SendPrimitiveAsync<T>`, or `SendNoContentAsync`) the generated code happened to invoke.
 
 #### Verification Is Scoped to Path Parameters
 
@@ -493,8 +488,8 @@ Each builder carries its own path parameters, so verification distinguishes betw
 ```csharp
 await service.GetFundAsync(calledId);
 
-await mockClient.Api.Funds[calledId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
-await mockClient.Api.Funds[otherId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Never);
+await mockClient.Api.Funds[calledId].VerifyGetAsync(Times.Once);
+await mockClient.Api.Funds[otherId].VerifyGetAsync(Times.Never);
 ```
 
 #### Verifying Additional Request Details
@@ -502,22 +497,34 @@ await mockClient.Api.Funds[otherId].VerifyGetAsync<FundItemRequestBuilder, Fund>
 Pass a predicate to assert on headers, query parameters, or any other part of the request:
 
 ```csharp
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(
+await mockClient.Api.Funds[fundId].VerifyGetAsync(
     Times.Once,
     req => req.Headers.ContainsKey("Authorization")
 );
 ```
 
-#### Explicit Type Arguments
+When the count doesn't match, NSubstitute throws a `ReceivedCallsException` describing the expected and actual calls.
 
-Unlike the `Mock*` methods, `VerifyGetAsync` has no response value to infer types from, so both type arguments must be supplied: the builder type and the response type.
+#### Verifying the Request Body
+
+`req.Content != null` (as used in the predicate example above) only proves *a* body was sent — it can't tell you *what* was in it. `VerifyPutAsync`/`VerifyPostAsync`/`VerifyPatchAsync` return a chainable assertion: `.WithBody<TBody>(predicate)` deserializes the actual JSON payload back into your request DTO and adds that as a second condition, alongside the call count already checked:
 
 ```csharp
-//                                        builder type          response type
-await mockClient.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
+await mockClient.ApiInternal.Funds[fundId]
+    .VerifyPutAsync(Times.Once)
+    .WithBody<FundUpdateDto>(body => body.RequiresMarket == true);
 ```
 
-When the count doesn't match, NSubstitute throws a `ReceivedCallsException` describing the expected and actual calls.
+The count check runs first, with the same semantics as awaiting the assertion directly — so `VerifyPutAsync(Times.Never).WithBody(...)` still fails correctly if any call happened at all, and never bothers inspecting a body when none was expected. Because the returned assertion is directly awaitable, plain count checks don't need `.WithBody` at all:
+
+```csharp
+// count only — WithBody is opt-in
+await mockClient.ApiInternal.Funds[fundId].VerifyPutAsync(Times.Once);
+```
+
+> ⚠️ **Requires a real serializer.** `GetMockableClient<T>()` wires a `JsonSerializationWriterFactory` into the mock adapter by default specifically so this works — the generated `PutAsync`/`PostAsync`/`PatchAsync` methods call `RequestInformation.SetContentFromParsable`, which needs a working factory to populate `RequestInformation.Content` at all. If you constructed the mock adapter yourself instead of going through `GetMockableClient<T>()`, `Content` stays `null` and `WithBody` always throws `ReceivedCallsException`.
+
+When nothing matches — no call was made at all, a call was made but the count doesn't match, or the count matches but no matching call's body satisfies the predicate — it throws `ReceivedCallsException`, same as the other `Verify*` methods.
 
 ---
 
@@ -678,20 +685,15 @@ _client.Api.Funds[fundId].MockGetAsync(
 
 ### `Verify*` Methods
 
-Every `Mock*` method has a matching `Verify*` counterpart that asserts the endpoint was called.
+Every verb has exactly one `Verify*Async` method — no response-shape type argument, and no separate name for a no-content or collection variant. It matches the call regardless of which `IRequestAdapter` member the real code happened to invoke.
 
-| Method | Verifies | Pairs with |
+| Method | Verifies | Matches these `Mock*` shapes |
 |---|---|---|
-| `VerifyGetAsync<TBuilder, TResponse>()` | GET returning a single object | `MockGetAsync` |
-| `VerifyGetAsync<TBuilder>()` | GET returning a string/primitive | `MockGetAsync(string)` |
-| `VerifyGetCollectionAsync<TBuilder, TResponse>()` | GET returning a collection | `MockGetCollectionAsync` |
-| `VerifyPostAsync<TBuilder, TResponse>()` | POST returning a single object | `MockPostAsync` |
-| `VerifyPostCollectionAsync<TBuilder, TResponse>()` | POST returning a collection | `MockPostCollectionAsync` |
-| `VerifyPutAsync<TBuilder, TResponse>()` | PUT returning a single object | `MockPutAsync` |
-| `VerifyPatchAsync<TBuilder, TResponse>()` | PATCH returning a single object | `MockPatchAsync` |
-| `VerifyDeleteAsync<TBuilder>()` | DELETE returning no content | `MockDeleteAsync()` |
-| `VerifyDeleteAsync<TBuilder, TResponse>()` | DELETE returning a single object | `MockDeleteAsync(response)` |
-| `VerifyDeleteCollectionAsync<TBuilder, TResponse>()` | DELETE returning a collection | `MockDeleteCollectionAsync` |
+| `VerifyGetAsync<TBuilder>()` | GET | `MockGetAsync` (object), `MockGetAsync(string)` (primitive), `MockGetCollectionAsync` |
+| `VerifyPostAsync<TBuilder>()` | POST | `MockPostAsync` (object or no-content), `MockPostCollectionAsync` |
+| `VerifyPutAsync<TBuilder>()` | PUT | `MockPutAsync` (object or no-content) |
+| `VerifyPatchAsync<TBuilder>()` | PATCH | `MockPatchAsync` (object or no-content) |
+| `VerifyDeleteAsync<TBuilder>()` | DELETE | `MockDeleteAsync` (no-content, object, or collection) |
 
 All of them share the same signature:
 
@@ -699,11 +701,11 @@ All of them share the same signature:
 - `times` (Times, optional) - The expected number of calls. Defaults to `Times.AtLeastOnce`. See [Specifying Call Counts with `Times`](#specifying-call-counts-with-times).
 - `requestInfoPredicate` (optional) - Additional conditions the request must match
 
-**Returns:** A `Task` that must be awaited
+**Returns:** A [`VerifyCallAssertion`](#verifycallassertionwithbodytbody) — directly awaitable for a count-only check, or chain `.WithBody<TBody>(predicate)` (PUT/POST/PATCH) to also assert on the deserialized request body
 
 **Throws:** `ReceivedCallsException` when the actual call count does not match `times`
 
-**Matching:** URL template, path parameter values, and HTTP method must all match the request builder the method is called on.
+**Matching:** URL template, path parameter values, and HTTP method must all match the request builder the method is called on. The response shape (object/collection/primitive/no-content) is deliberately *not* part of the match — only `TBuilder` is a type argument, inferred from the call site, never written out.
 
 **Example:**
 ```csharp
@@ -713,23 +715,43 @@ _client.Api.Funds[fundId].MockGetAsync(fund);
 await _service.GetFundAsync(fundId);
 
 // At least once
-await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>();
+await _client.Api.Funds[fundId].VerifyGetAsync();
 
 // Exact counts
-await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Once);
-await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Exactly(3));
+await _client.Api.Funds[fundId].VerifyGetAsync(Times.Once);
+await _client.Api.Funds[fundId].VerifyGetAsync(Times.Exactly(3));
 
 // Never called
-await _client.Api.Funds[otherId].VerifyGetAsync<FundItemRequestBuilder, Fund>(Times.Never);
+await _client.Api.Funds[otherId].VerifyGetAsync(Times.Never);
 
 // With conditions
-await _client.Api.Funds[fundId].VerifyGetAsync<FundItemRequestBuilder, Fund>(
+await _client.Api.Funds[fundId].VerifyGetAsync(
     Times.Once,
     req => req.Headers.ContainsKey("Authorization")
 );
 ```
 
-> **Note:** Type arguments are required — there is no response value for the compiler to infer them from. The exceptions are `VerifyGetAsync<TBuilder>` (primitive) and `VerifyDeleteAsync<TBuilder>` (no content), which take only the builder type.
+---
+
+### `VerifyCallAssertion.WithBody<TBody>()`
+
+Chained off `VerifyPutAsync()`, `VerifyPostAsync()`, or `VerifyPatchAsync()`. Additionally asserts that at least one matching call's deserialized body satisfies a predicate, on top of the call-count check those methods already run — see [Verifying the Request Body](#verifying-the-request-body) above. This is the way to check both count and body together, for either a with-response or a no-content endpoint.
+
+**Parameters:**
+- `bodyPredicate` (`Func<TBody, bool>`) - A predicate over the deserialized request body; must be satisfied by at least one matching call
+
+**Returns:** A `Task` that must be awaited
+
+**Throws:** `ReceivedCallsException` when the call count doesn't match, or when it matches but no matching call's body satisfies `bodyPredicate`
+
+**Requires:** `TBody` must implement `IParsable` and expose a static `CreateFromDiscriminatorValue(IParseNode)` factory, as every Kiota-generated model does. The mock client must have been created via `GetMockableClient<T>()` so the adapter has a real serializer.
+
+**Example:**
+```csharp
+await mockClient.ApiInternal.Funds[fundId]
+    .VerifyPutAsync(Times.Once)
+    .WithBody<FundUpdateDto>(body => body.RequiresMarket == true);
+```
 
 ---
 
@@ -806,6 +828,22 @@ _client.Api.Funds.MockPostAsync(createdFund);
 
 ---
 
+### `MockPostAsync<TBuilder>()`
+
+Mocks a POST request that returns no content. Use for action/status-transition endpoints backed by a bare `[HttpPost]` returning `IActionResult`/`ActionResult` with no body.
+
+**Parameters:**
+- `requestInfoPredicate` (optional) - Additional conditions to match the request
+
+**Returns:** The request builder for fluent chaining
+
+**Example:**
+```csharp
+_client.Api.Funds[fundId].Status.MarkSetupComplete.MockPostAsync();
+```
+
+---
+
 ### `MockPutAsync<TBuilder, TResponse>()`
 
 Mocks a PUT request that returns a single object.
@@ -824,6 +862,22 @@ _client.Api.Funds[fundId].MockPutAsync(updatedFund);
 
 ---
 
+### `MockPutAsync<TBuilder>()`
+
+Mocks a PUT request that returns no content. Use for a fire-and-forget replication write between services, where the endpoint has nothing to hand back.
+
+**Parameters:**
+- `requestInfoPredicate` (optional) - Additional conditions to match the request
+
+**Returns:** The request builder for fluent chaining
+
+**Example:**
+```csharp
+_client.ApiInternal.Funds[fundId].MockPutAsync();
+```
+
+---
+
 ### `MockPatchAsync<TBuilder, TResponse>()`
 
 Mocks a PATCH request that returns a single object.
@@ -838,6 +892,22 @@ Mocks a PATCH request that returns a single object.
 ```csharp
 var patchedFund = new Fund { Id = fundId, Status = FundStatus.Closed };
 _client.Api.Funds[fundId].MockPatchAsync(patchedFund);
+```
+
+---
+
+### `MockPatchAsync<TBuilder>()`
+
+Mocks a PATCH request that returns no content. This is the common case for partial-update endpoints backed by a bare `[HttpPatch]` returning `IActionResult`/`ActionResult` with no body.
+
+**Parameters:**
+- `requestInfoPredicate` (optional) - Additional conditions to match the request
+
+**Returns:** The request builder for fluent chaining
+
+**Example:**
+```csharp
+_client.Api.FundApplications["self"][id].MockPatchAsync();
 ```
 
 ---
@@ -1013,244 +1083,13 @@ _client.Api.Funds
 
 ---
 
-## � Legacy API Reference - URL-Based Mocking
-
-> **Note:** The type-safe extension methods (MockGetAsync, MockPostAsync, etc.) are now the recommended approach.  
-> This section documents the older URL-based API for backward compatibility and migration purposes.
-
-### Overview
-
-The legacy API requires you to:
-- Write URL templates manually as strings
-- Handle path parameter name variations yourself  
-- Use predicates to match specific requests
-
-While still functional, the type-safe extensions provide better compile-time safety and are less error-prone.
-
----
-
-### `GetMockableClient<T>()`
-
-Creates a mockable instance of a Kiota-generated client.
-
-**Type Parameter:**
-- `T` - The Kiota-generated client type (must inherit from `BaseRequestBuilder`)
-
-**Returns:** An instance of `T` with a mocked `IRequestAdapter`
-
-**Example:**
-```csharp
-var mockClient = KiotaClientMockExtensions.GetMockableClient<MyKiotaClient>();
-```
-
----
-
-### `MockClientResponse<T, R>()`
-
-Mocks a single object response for an endpoint using URL pattern matching.
-
-**Parameters:**
-- `urlTemplate` (string) - The URL pattern to match (e.g., `/api/items/{id}`)
-- `returnObject` (R?) - The object to return (must implement `IParsable`)
-- `requestInfoPredicate` (optional) - Additional matching conditions
-
-**Overload:** `MockClientResponse<T>(string, string?)` - For string responses
-
-**Example:**
-```csharp
-var fundId = Guid.NewGuid();
-var fund = new Fund { Id = fundId, Name = "Test Fund" };
-
-mockClient.MockClientResponse(
-    "/api/funds/{id}",
-    fund,
-    req => req.GetPathParameter("id").ToString() == fundId.ToString()
-);
-
-// String response
-mockClient.MockClientResponse("/api/status", "operational");
-```
-
----
-
-### `MockClientCollectionResponse<T, R>()`
-
-Mocks a collection response using URL pattern matching.
-
-**Parameters:**
-- `urlTemplate` (string) - The URL pattern to match
-- `returnObject` (IEnumerable<R>?) - The collection to return
-- `requestInfoPredicate` (optional) - Additional matching conditions
-
-**Example:**
-```csharp
-var activities = new List<Activity>
-{
-    new Activity { Id = Guid.NewGuid(), Name = "Activity 1" }
-};
-
-mockClient.MockClientCollectionResponse(
-    "/api/funds/{fundId}/activities",
-    activities,
-    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
-);
-```
-
----
-
-### `MockClientNoContentResponse<T>()`
-
-Mocks a no-content (204) response using URL pattern matching.
-
-**Parameters:**
-- `urlTemplate` (string) - The URL pattern to match
-- `requestInfoPredicate` (optional) - Additional matching conditions
-
-**Example:**
-```csharp
-var fundId = Guid.NewGuid();
-
-mockClient.MockClientNoContentResponse(
-    "/api/funds/{id}",
-    req => req.GetPathParameter("id").ToString() == fundId.ToString()
-);
-```
-
----
-
-### `MockClientResponseException<T, R>()`
-
-Mocks an exception for a single object endpoint using URL pattern matching.
-
-**Parameters:**
-- `urlTemplate` (string) - The URL pattern to match
-- `exception` (Exception) - The exception to throw
-- `requestInfoPredicate` (optional) - Additional matching conditions
-
-**Example:**
-```csharp
-var nonExistentId = Guid.NewGuid();
-
-mockClient.MockClientResponseException<TestRequestBuilder, Fund>(
-    "/api/funds/{id}",
-    new ApiException("Fund not found") { ResponseStatusCode = 404 },
-    req => req.GetPathParameter("id").ToString() == nonExistentId.ToString()
-);
-```
-
----
-
-### `MockClientCollectionResponseException<T, R>()`
-
-Mocks an exception for a collection endpoint using URL pattern matching.
-
-**Parameters:**
-- `urlTemplate` (string) - The URL pattern to match
-- `exception` (Exception) - The exception to throw
-- `requestInfoPredicate` (optional) - Additional matching conditions
-
-**Example:**
-```csharp
-mockClient.MockClientCollectionResponseException<TestRequestBuilder, Activity>(
-    "/api/activities",
-    new ApiException("Internal server error") { ResponseStatusCode = 500 }
-);
-```
-
----
-
-### `MockClientNoContentResponseException<T>()`
-
-Mocks an exception for a no-content endpoint using URL pattern matching.
-
-**Parameters:**
-- `urlTemplate` (string) - The URL pattern to match
-- `exception` (Exception) - The exception to throw
-- `requestInfoPredicate` (optional) - Additional matching conditions
-
-**Example:**
-```csharp
-mockClient.MockClientNoContentResponseException(
-    "/api/funds/{id}",
-    new ApiException("Conflict") { ResponseStatusCode = 409 },
-    req => req.GetPathParameter("id").ToString() == conflictingFundId.ToString()
-);
-```
-
-### Legacy API Usage Notes
-
-#### URL Pattern Matching
-
-The library uses **positional token matching** on URL templates after normalizing Kiota's URL template format:
-
-1. Strips the `{+baseurl}` prefix from Kiota's URL template
-2. Removes query parameter template syntax `{?param1,param2}`
-3. Replaces path parameters with positional tokens: `{pathParam1}`, `{pathParam2}`, etc.
-4. Ensures leading slash for consistent matching
-5. Performs case-insensitive exact match on the tokenized pattern
-
-**Example:**
-```csharp
-// Kiota-generated: "{+baseurl}/api/funds/{fund-id}{?expand}"
-// After normalization: "/api/funds/{pathParam1}"
-
-// Your mock (any parameter name works structurally):
-mockClient.MockClientResponse(
-    "/api/funds/{id}",      // Normalized to "/api/funds/{pathParam1}" - Matches!
-    fund,
-    req => req.GetPathParameter("id").ToString() == fundId.ToString()
-);
-```
-
-#### Smart Parameter Access
-
-The library provides helper methods that try multiple naming variations:
-
-- `GetPathParameter(name)` - Gets a parameter, throws clear exception if not found
-- `TryGetPathParameter(name, out value)` - Safe version that returns bool
-
-When you call `req.GetPathParameter("fundId")`, it automatically tries:
-1. `fundId` (original - camelCase)
-2. `fund-id` (kebab-case)
-3. `fund%2Did` (URL-encoded kebab-case)
-4. `FundId` (PascalCase)
-
-#### Query Parameters
-
-Query parameters are accessed through `req.QueryParameters`:
-
-```csharp
-mockClient.MockClientCollectionResponse(
-    "/api/items",
-    items,
-    req => req.QueryParameters.ContainsKey("status") 
-        && req.QueryParameters["status"].ToString() == "active"
-);
-```
-
-#### Multiple Path Parameters
-
-```csharp
-var fundId = Guid.NewGuid();
-var activityId = Guid.NewGuid();
-
-mockClient.MockClientResponse(
-    "/api/funds/{fundId}/activities/{activityId}",
-    activity,
-    req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
-        && req.GetPathParameter("activityId").ToString() == activityId.ToString()
-);
-```
-
----
-
 ## 🔍 Troubleshooting
 
 ### Mock Not Matching / Returning Null
 
 **Problem:** Your mock is set up but the service still returns null or throws "not configured".
 
-**Common Causes with Type-Safe Extensions:**
+**Common causes:**
 
 1. **Wrong path parameter value:**
    ```csharp
@@ -1284,58 +1123,7 @@ _client.Api.Funds[fundId].MockGetAsync(
 );
 ```
 
-**Common Causes with Legacy URL-Based API:**
-
-1. **Parameter name mismatch:**
-   ```csharp
-   // Use GetPathParameter - it tries variations automatically
-   mockClient.MockClientResponse(
-       "/api/funds/{fundId}",
-       fund,
-       req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
-   );
-   ```
-
-2. **URL pattern mismatch:**
-   ```csharp
-   // ❌ Mock: "/api/funds/{id}"
-   // ❌ Actual: "/api/funds/{id}/activities"
-   // These won't match - paths must have same structure
-   ```
-
-3. **Predicate always returns false:**
-   ```csharp
-   mockClient.MockClientResponse(
-       "/api/funds/{fundId}",
-       fund,
-       req => req.GetPathParameter("fundId").ToString() == wrongId  // ❌ Wrong ID
-   );
-   ```
-
 ### Advanced Debugging
-
-#### Check URL Template (Legacy API)
-
-```csharp
-var urlTemplate = KiotaClientMockExtensions.GetUrlTemplate(
-    mockClient.Api.Funds[fundId]
-);
-Console.WriteLine($"Kiota's template: {urlTemplate}");
-
-// Use in your mock
-mockClient.MockClientResponse(
-    urlTemplate,
-    fund,
-    req => {
-        // Debug: Log all parameters
-        foreach (var kvp in req.PathParameters)
-        {
-            Console.WriteLine($"  {kvp.Key} = {kvp.Value}");
-        }
-        return req.GetPathParameter("fund-id").ToString() == fundId.ToString()
-    }
-);
-```
 
 #### KeyNotFoundException with GetPathParameter
 
@@ -1355,9 +1143,8 @@ req => req.GetPathParameter("id").ToString() == fundId.ToString()
 // ✅ Use actual name from error
 req => req.GetPathParameter("fund-id").ToString() == fundId.ToString()
 
-// OR use natural naming (recommended):
-mockClient.MockClientResponse(
-    "/api/funds/{fundId}",  // Natural camelCase
+// OR use natural naming (recommended) — GetPathParameter tries variations automatically:
+_client.Api.Funds[fundId].MockGetAsync(
     fund,
     req => req.GetPathParameter("fundId").ToString() == fundId.ToString()
     //     Automatically tries: fundId, fund-id, fund%2Did, FundId
@@ -1366,45 +1153,11 @@ mockClient.MockClientResponse(
 
 #### Test Fails After Regenerating Kiota Client
 
-**Problem:** Tests were passing, but after regenerating your Kiota client, you get exceptions or mismatches.
+**Problem:** Tests were passing, but after regenerating your Kiota client, you get compilation errors or a `KeyNotFoundException`.
 
 **Cause:** The API contract changed (parameter renamed, path changed) and Kiota generated new code.
 
-**Why This Is Good:** Your tests caught a breaking change!
-
-**Solution:**
-1. Check what changed in the generated code
-2. Verify with your API team if this was intentional
-3. Update your tests to reflect the new contract
-
-**With Type-Safe Extensions:** Compilation errors will guide you to what needs updating.
-
-**With Legacy API:** Runtime errors will show parameter name mismatches.
-
----
-    req => {
-        // Debug: Log all parameter keys and values
-        Console.WriteLine("=== Request Debug Info ===");
-        Console.WriteLine($"URL: {req.UrlTemplate}");
-        Console.WriteLine($"Parameters:");
-        foreach (var kvp in req.PathParameters)
-        {
-            Console.WriteLine($"  {kvp.Key} = {kvp.Value}");
-        }
-        
-        // Now check with the correct key
-        return req.GetPathParameter("fund-id").ToString() == fundId.ToString();
-    }
-);
-```
-
-### Test Fails After Regenerating Kiota Client
-
-**Problem:** Tests were passing, but after regenerating your Kiota client, you get `KeyNotFoundException`.
-
-**Cause:** The API contract changed (parameter renamed, path changed) and Kiota generated new code.
-
-**Why This Is Good:** Your tests caught a breaking change! This is exactly what explicit parameter checking is designed to do.
+**Why This Is Good:** Your tests caught a breaking change! With the type-safe extensions, a renamed builder or changed generic constraint fails to compile, pointing you straight at what needs updating — you don't need to run the suite to find out.
 
 **Solution:**
 
@@ -1438,36 +1191,13 @@ public CommentItemRequestBuilder(...)
 // - comment-id
 
 // Use them in your mock:
-mockedClient.MockClientResponse(
-    "/api/funds/{fund-id}/activities/{activity-id}/comments/{comment-id}",
+mockedClient.Api.Funds[fundId].Activities[activityId].Comments[commentId].MockGetAsync(
     comment,
     req => req.GetPathParameter("fund-id").ToString() == fundId.ToString()
         && req.GetPathParameter("activity-id").ToString() == activityId.ToString()
         && req.GetPathParameter("comment-id").ToString() == commentId.ToString()
 );
 ```
-
-### Using GetUrlTemplate() Helper
-
-**Purpose:** Extract URL templates programmatically from Kiota's generated request builders.
-
-**Usage:**
-```csharp
-// Get template from a request builder instance
-var urlTemplate = KiotaClientMockExtensions.GetUrlTemplate(
-    mockClient.Api.Funds[fundId]
-);
-// Returns: "/api/funds/{*}"
-
-// Use in mock (but still need to check parameter keys explicitly)
-mockedClient.MockClientResponse(
-    urlTemplate,
-    fund,
-    req => req.GetPathParameter("fund-id").ToString() == fundId.ToString()
-);
-```
-
-**Note:** `GetUrlTemplate()` returns wildcards for parameters (`{*}`), which is useful for the URL pattern. However, you still need to know the exact parameter key names (from generated code) for your predicates.
 
 ---
 
@@ -1640,24 +1370,16 @@ adapter
 
 ### Finding the Correct URL Template
 
-To find the exact URL template for manual mocking:
+To find the exact URL template for manual mocking, check the generated request builder:
+```csharp
+// In: FundItemRequestBuilder.cs
+public FundItemRequestBuilder(...)
+    : base(requestAdapter, 
+           "{+baseurl}/api/funds/{fund%2Did}",  // ← This is your URL template
+           pathParameters)
+```
 
-1. **Check the generated request builder**:
-   ```csharp
-   // In: FundItemRequestBuilder.cs
-   public FundItemRequestBuilder(...)
-       : base(requestAdapter, 
-              "{+baseurl}/api/funds/{fund%2Did}",  // ← This is your URL template
-              pathParameters)
-   ```
-
-2. **Or use GetUrlTemplate()** (for reference):
-   ```csharp
-   var template = KiotaClientMockExtensions.GetUrlTemplate(
-       _client.Api.Funds[fundId]
-   );
-   // But note: URL-decoded, so "{fund%2Did}" becomes "{fund-id}"
-   ```
+Or read it off an already-constructed `RequestInformation` with `req.NormalizeUrlTemplate()` — it strips `{+baseurl}` and turns path/query parameters into positional names (`{fund%2Did}` becomes `{pathParam1}`), which is what the "Verifying Additional Request Details" predicate examples above use.
 
 ### When to Use Manual Mocking
 

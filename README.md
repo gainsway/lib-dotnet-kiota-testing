@@ -524,7 +524,14 @@ await mockClient.ApiInternal.Funds[fundId].VerifyPutAsync(Times.Once);
 
 > ⚠️ **Requires a real serializer.** `GetMockableClient<T>()` wires a `JsonSerializationWriterFactory` into the mock adapter by default specifically so this works — the generated `PutAsync`/`PostAsync`/`PatchAsync` methods call `RequestInformation.SetContentFromParsable`, which needs a working factory to populate `RequestInformation.Content` at all. If you constructed the mock adapter yourself instead of going through `GetMockableClient<T>()`, `Content` stays `null` and `WithBody` always throws `ReceivedCallsException`.
 
-When nothing matches — no call was made at all, a call was made but the count doesn't match, or the count matches but no matching call's body satisfies the predicate — it throws `ReceivedCallsException`, same as the other `Verify*` methods.
+When nothing matches — no call was made at all, a call was made but the count doesn't match, or the count matches but no matching call's body satisfies the predicate — it throws `ReceivedCallsException`, same as the other `Verify*` methods. In the last case (count matched, predicate didn't), the exception message includes the actual JSON body of every call that was checked, so a wrong-field or wrong-value bug in your predicate — or in the code under test — is diagnosable straight from the test output:
+
+```text
+ReceivedCallsException: Expected a PUT request to {+baseurl}/api/funds/{fund%2Did} whose body
+satisfies the given predicate. 1 matching call(s) were found by method/URL/path-parameters,
+but none had a body satisfying the predicate. Actual body received:
+  [0]: {"requiresMarket":false}
+```
 
 ---
 
@@ -742,7 +749,7 @@ Chained off `VerifyPutAsync()`, `VerifyPostAsync()`, or `VerifyPatchAsync()`. Ad
 
 **Returns:** A `Task` that must be awaited
 
-**Throws:** `ReceivedCallsException` when the call count doesn't match, or when it matches but no matching call's body satisfies `bodyPredicate`
+**Throws:** `ReceivedCallsException` when the call count doesn't match, or when it matches but no matching call's body satisfies `bodyPredicate`. In the latter case, the exception message includes the actual JSON body of every checked call.
 
 **Requires:** `TBody` must implement `IParsable` and expose a static `CreateFromDiscriminatorValue(IParseNode)` factory, as every Kiota-generated model does. The mock client must have been created via `GetMockableClient<T>()` so the adapter has a real serializer.
 

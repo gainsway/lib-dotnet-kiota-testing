@@ -1075,24 +1075,49 @@ public static class RequestBuilderMockExtensions
                 && req.Content != null
             );
 
+        var rejectedBodies = new List<string>();
+
         foreach (var req in candidates)
         {
             var contentType = req.Headers.TryGetValue("Content-Type", out var contentTypes)
                 ? contentTypes.FirstOrDefault() ?? parseNodeFactory.ValidContentType
                 : parseNodeFactory.ValidContentType;
 
-            var parseNode = await parseNodeFactory.GetRootParseNodeAsync(contentType, req.Content);
+            using var buffered = new MemoryStream();
+            await req.Content.CopyToAsync(buffered);
+            buffered.Position = 0;
+
+            var parseNode = await parseNodeFactory.GetRootParseNodeAsync(contentType, buffered);
             var body = (TBody)parseNode.GetObjectValue(parsableFactory);
 
             if (bodyPredicate(body))
             {
                 return;
             }
+
+            buffered.Position = 0;
+            using var reader = new StreamReader(buffered);
+            rejectedBodies.Add(await reader.ReadToEndAsync());
         }
+
+        if (rejectedBodies.Count == 0)
+        {
+            throw new ReceivedCallsException(
+                $"Expected a {expectedMethod} request to {urlTemplate} whose body satisfies "
+                    + "the given predicate, but no matching call was found."
+            );
+        }
+
+        var bodiesText = string.Join(
+            Environment.NewLine,
+            rejectedBodies.Select((json, i) => $"  [{i}]: {json}")
+        );
 
         throw new ReceivedCallsException(
             $"Expected a {expectedMethod} request to {urlTemplate} whose body satisfies "
-                + "the given predicate, but no matching call was found."
+                + $"the given predicate. {rejectedBodies.Count} matching call(s) were found by "
+                + $"method/URL/path-parameters, but none had a body satisfying the predicate. "
+                + $"Actual bod{(rejectedBodies.Count == 1 ? "y" : "ies")} received:{Environment.NewLine}{bodiesText}"
         );
     }
 

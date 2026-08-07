@@ -385,23 +385,24 @@ public class RequestBuilderMockExtensionsTests
     }
 
     [Test]
-    public void VerifyPutAsync_WithBody_ShouldThrow_WhenCountMatchesButBodyDoesNot()
+    public async Task VerifyPutAsync_WithBody_ShouldThrow_WhenCountMatchesButBodyDoesNot()
     {
         // Arrange
         var itemId = "123";
         _mockClient.Api.Items[itemId].MockPutAsync();
+        await _mockClient.Api.Items[itemId].PutNoContentAsync(new TestRequest { Flag = false });
 
-        // Act
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
-        {
-            await _mockClient.Api.Items[itemId].PutNoContentAsync(new TestRequest { Flag = false });
-
-            // Assert - one call happened (satisfying Times.Once), but its body doesn't match
+        // Act - one call happened (satisfying Times.Once), but its body doesn't match
+        var ex = Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient
                 .Api.Items[itemId]
                 .VerifyPutAsync(Times.Once)
-                .WithBody<TestRequest>(body => body.Flag == true);
-        });
+                .WithBody<TestRequest>(body => body.Flag == true)
+        );
+
+        // Assert - the actual (rejected) body is included, so a wrong-value bug is
+        // diagnosable from the failure message alone, without attaching a debugger.
+        Assert.That(ex!.Message, Does.Contain("\"flag\":false"));
     }
 
     [Test]

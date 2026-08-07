@@ -1407,27 +1407,67 @@ public static class RequestBuilderMockExtensions
         Func<RequestInformation, bool>? requestInfoPredicate
     )
     {
-        var matchCount = mockAdapter
+        var allRequests = mockAdapter
             .ReceivedCalls()
             .Select(call => call.GetArguments().OfType<RequestInformation>().FirstOrDefault())
             .OfType<RequestInformation>()
-            .Count(req =>
-                MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
-                && (requestInfoPredicate == null || requestInfoPredicate(req))
-            );
+            .ToList();
+
+        var matchCount = allRequests.Count(req =>
+            MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
+            && (requestInfoPredicate == null || requestInfoPredicate(req))
+        );
 
         var satisfied = times.Count is int exactCount ? matchCount == exactCount : matchCount >= 1;
 
         if (!satisfied)
         {
+            // Same method + URL template, but excluded by path parameters or the predicate:
+            // surfacing these turns "0 matching calls" into "did you mean this ID?" instead of
+            // leaving it ambiguous whether the endpoint was never called at all.
+            var sameEndpointOtherRequests = allRequests
+                .Where(req =>
+                    req.HttpMethod == expectedMethod
+                    && string.Equals(
+                        req.UrlTemplate,
+                        urlTemplate,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                    && !MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
+                )
+                .Select(DescribePathParameters)
+                .Distinct()
+                .ToList();
+
+            var expectedParams = DescribePathParameters(pathParameters);
+            var detail =
+                sameEndpointOtherRequests.Count == 0
+                    ? "No calls were made to this endpoint at all."
+                    : $"Calls were made to this endpoint with different path parameters: "
+                        + string.Join(", ", sameEndpointOtherRequests.Select(p => $"[{p}]"));
+
             throw new ReceivedCallsException(
-                $"Expected a {expectedMethod} request to {urlTemplate} {times}, "
-                    + $"but received {matchCount} matching call(s)."
+                $"Expected a {expectedMethod} request to {urlTemplate} with path parameters "
+                    + $"[{expectedParams}] {times}, but received {matchCount} matching call(s). "
+                    + detail
             );
         }
 
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Renders path parameters as <c>key=value</c> pairs for diagnostic messages, excluding the
+    /// synthetic <c>baseurl</c> entry that every <see cref="RequestInformation"/> carries.
+    /// </summary>
+    private static string DescribePathParameters(RequestInformation req) =>
+        DescribePathParameters(req.PathParameters);
+
+    private static string DescribePathParameters(IDictionary<string, object> pathParameters) =>
+        string.Join(
+            ", ",
+            pathParameters.Where(p => p.Key != "baseurl").Select(p => $"{p.Key}={p.Value}")
+        );
 
     /// <summary>
     /// Gets the mock IRequestAdapter from a request builder using reflection.

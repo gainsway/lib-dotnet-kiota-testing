@@ -186,6 +186,27 @@ public class RequestBuilderMockExtensionsTests
     }
 
     [Test]
+    public async Task VerifyGetAsync_WhenVerifiedAgainstWrongPathId_ShouldReportActualIdCalled()
+    {
+        // Arrange - simulates a typo: the test verifies against the wrong ID, but a real call
+        // did happen against a *different* ID on the same endpoint.
+        var calledId = "123";
+        var typoedId = "456";
+        _mockClient.Api.Items[calledId].MockGetAsync(new TestResponse { Value = "called" });
+
+        // Act
+        await _mockClient.Api.Items[calledId].GetAsync();
+
+        // Assert - "0 matching calls" alone can't distinguish "never called" from "called with
+        // a different ID"; the message must surface the ID that was actually used.
+        var ex = Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+            await _mockClient.Api.Items[typoedId].VerifyGetAsync(Times.Once)
+        );
+
+        Assert.That(ex!.Message, Does.Contain($"id={calledId}"));
+    }
+
+    [Test]
     public async Task VerifyGetAsync_ForPrimitive_ShouldVerifyCall()
     {
         // Arrange

@@ -503,7 +503,13 @@ await mockClient.Api.Funds[fundId].VerifyGetAsync(
 );
 ```
 
-When the count doesn't match, NSubstitute throws a `ReceivedCallsException` describing the expected and actual calls.
+When the count doesn't match, it throws a `ReceivedCallsException` describing the expected and actual calls. If other calls were made to the same URL template and HTTP method but with *different* path parameter values — the classic "verified against the wrong ID" typo — those are listed too, so a zero-match failure doesn't leave you guessing whether the endpoint was never called or just called with an ID you didn't expect:
+
+```text
+ReceivedCallsException: Expected a GET request to {+baseurl}/api/funds/{fund%2Did} with path
+parameters [fund-id=wrong-id] AtLeastOnce, but received 0 matching call(s). Calls were made to
+this endpoint with different path parameters: [fund-id=actual-id]
+```
 
 #### Verifying the Request Body
 

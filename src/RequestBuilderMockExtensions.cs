@@ -1,8 +1,10 @@
 using System.Reflection;
 using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Serialization;
+using Microsoft.Kiota.Serialization.Json;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using NSubstitute.Exceptions;
 
 namespace Gainsway.Kiota.Testing;
 
@@ -411,6 +413,46 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a POST request (no content response).
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <remarks>
+    /// For POST endpoints that return a body, use
+    /// <see cref="MockPostAsync{TBuilder, TResponse}(TBuilder, TResponse, Func{RequestInformation, bool})"/>
+    /// instead.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// _client.Api.Funds[fundId].Status.MarkSetupComplete.MockPostAsync();
+    /// </code>
+    /// </example>
+    public static TBuilder MockPostAsync<TBuilder>(
+        this TBuilder requestBuilder,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendNoContentAsync(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.POST)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.CompletedTask);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
     /// Mocks a POST request that returns a collection of objects.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
@@ -569,6 +611,46 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Mocks a PUT request (no content response).
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <remarks>
+    /// For PUT endpoints that return a body, use
+    /// <see cref="MockPutAsync{TBuilder, TResponse}(TBuilder, TResponse, Func{RequestInformation, bool})"/>
+    /// instead.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// _client.ApiInternal.Funds[fundId].MockPutAsync();
+    /// </code>
+    /// </example>
+    public static TBuilder MockPutAsync<TBuilder>(
+        this TBuilder requestBuilder,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendNoContentAsync(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.PUT)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.CompletedTask);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
     /// Mocks a PATCH request that returns a single object.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
@@ -634,6 +716,47 @@ public static class RequestBuilderMockExtensions
                 Arg.Any<CancellationToken>()
             )
             .Throws(exception);
+
+        return requestBuilder;
+    }
+
+    /// <summary>
+    /// Mocks a PATCH request (no content response).
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="requestInfoPredicate">Optional additional conditions to match the request.</param>
+    /// <returns>The request builder for fluent chaining.</returns>
+    /// <remarks>
+    /// For PATCH endpoints that return a body, use
+    /// <see cref="MockPatchAsync{TBuilder, TResponse}(TBuilder, TResponse, Func{RequestInformation, bool})"/>
+    /// instead. This is the common case for partial-update endpoints backed by a bare
+    /// <c>[HttpPatch]</c> returning <c>IActionResult</c>/<c>ActionResult</c> with no body.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// _client.Api.FundApplications["self"][id].MockPatchAsync();
+    /// </code>
+    /// </example>
+    public static TBuilder MockPatchAsync<TBuilder>(
+        this TBuilder requestBuilder,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder
+    {
+        var mockAdapter = GetMockAdapter(requestBuilder);
+        var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
+
+        mockAdapter
+            .SendNoContentAsync(
+                Arg.Is<RequestInformation>(req =>
+                    MatchesBuilder(req, urlTemplate, pathParameters, Method.PATCH)
+                    && (requestInfoPredicate == null || requestInfoPredicate(req))
+                ),
+                Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.CompletedTask);
 
         return requestBuilder;
     }
@@ -918,6 +1041,111 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
+    /// Implementation behind <see cref="VerifyCallAssertion.WithBody{TBody}"/>: scans every
+    /// recorded call to <paramref name="mockAdapter"/> matching the given
+    /// method/URL/path-parameters/predicate, deserializes each candidate's body, and succeeds on
+    /// the first one satisfying <paramref name="bodyPredicate"/>.
+    /// </summary>
+    /// <remarks>
+    /// Requires the mock client to have been created with
+    /// <see cref="KiotaClientMockExtensions.GetMockableClient{T}"/>, which wires a real
+    /// <c>JsonSerializationWriterFactory</c> — without it, <c>RequestInformation.Content</c>
+    /// stays null and this always fails with a "no matching call" assertion.
+    /// </remarks>
+    internal static async Task VerifyRequestBodyCoreAsync<TBody>(
+        IRequestAdapter mockAdapter,
+        string urlTemplate,
+        Dictionary<string, object> pathParameters,
+        Method expectedMethod,
+        Func<TBody, bool> bodyPredicate,
+        Func<RequestInformation, bool>? requestInfoPredicate
+    )
+        where TBody : IParsable
+    {
+        var parsableFactory = GetParsableFactory<TBody>();
+        var parseNodeFactory = new JsonParseNodeFactory();
+
+        var candidates = mockAdapter
+            .ReceivedCalls()
+            .Select(call => call.GetArguments().OfType<RequestInformation>().FirstOrDefault())
+            .OfType<RequestInformation>()
+            .Where(req =>
+                MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
+                && (requestInfoPredicate == null || requestInfoPredicate(req))
+                && req.Content != null
+            );
+
+        var rejectedBodies = new List<string>();
+
+        foreach (var req in candidates)
+        {
+            var contentType = req.Headers.TryGetValue("Content-Type", out var contentTypes)
+                ? contentTypes.FirstOrDefault() ?? parseNodeFactory.ValidContentType
+                : parseNodeFactory.ValidContentType;
+
+            using var buffered = new MemoryStream();
+            await req.Content.CopyToAsync(buffered);
+            buffered.Position = 0;
+
+            var parseNode = await parseNodeFactory.GetRootParseNodeAsync(contentType, buffered);
+            var body = (TBody)parseNode.GetObjectValue(parsableFactory);
+
+            if (bodyPredicate(body))
+            {
+                return;
+            }
+
+            buffered.Position = 0;
+            using var reader = new StreamReader(buffered);
+            rejectedBodies.Add(await reader.ReadToEndAsync());
+        }
+
+        if (rejectedBodies.Count == 0)
+        {
+            throw new ReceivedCallsException(
+                $"Expected a {expectedMethod} request to {urlTemplate} whose body satisfies "
+                    + "the given predicate, but no matching call was found."
+            );
+        }
+
+        var bodiesText = string.Join(
+            Environment.NewLine,
+            rejectedBodies.Select((json, i) => $"  [{i}]: {json}")
+        );
+
+        throw new ReceivedCallsException(
+            $"Expected a {expectedMethod} request to {urlTemplate} whose body satisfies "
+                + $"the given predicate. {rejectedBodies.Count} matching call(s) were found by "
+                + $"method/URL/path-parameters, but none had a body satisfying the predicate. "
+                + $"Actual bod{(rejectedBodies.Count == 1 ? "y" : "ies")} received:{Environment.NewLine}{bodiesText}"
+        );
+    }
+
+    /// <summary>
+    /// Resolves the static <c>CreateFromDiscriminatorValue(IParseNode)</c> factory method that
+    /// every Kiota-generated model exposes, as a <see cref="ParsableFactory{TBody}"/> delegate.
+    /// </summary>
+    private static ParsableFactory<TBody> GetParsableFactory<TBody>()
+        where TBody : IParsable
+    {
+        var factoryMethod = typeof(TBody).GetMethod(
+            "CreateFromDiscriminatorValue",
+            BindingFlags.Public | BindingFlags.Static
+        );
+
+        if (factoryMethod == null)
+        {
+            throw new InvalidOperationException(
+                $"{typeof(TBody).Name} does not expose a static CreateFromDiscriminatorValue(IParseNode) "
+                    + "method. Every Kiota-generated model has one; this type may not be a generated model."
+            );
+        }
+
+        return (ParsableFactory<TBody>)
+            Delegate.CreateDelegate(typeof(ParsableFactory<TBody>), factoryMethod);
+    }
+
+    /// <summary>
     /// Gets the URL template and path parameters from a request builder using reflection.
     /// </summary>
     private static (string urlTemplate, Dictionary<string, object> pathParameters) GetBuilderInfo(
@@ -958,11 +1186,9 @@ public static class RequestBuilderMockExtensions
     }
 
     /// <summary>
-    /// Verifies that a GET request returning a single object (IParsable) was sent to this
-    /// endpoint the expected number of times.
+    /// Verifies that a GET request was sent to this endpoint the expected number of times.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
     /// <param name="requestBuilder">The Kiota-generated request builder.</param>
     /// <param name="times">
     /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>, which
@@ -970,8 +1196,13 @@ public static class RequestBuilderMockExtensions
     /// Use <see cref="Times.Never"/> to assert it was never called.
     /// </param>
     /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
+    /// <returns>
+    /// A pending <see cref="VerifyCallAssertion"/>. Await it directly for a count-only check.
+    /// </returns>
     /// <remarks>
+    /// Matches the call regardless of the endpoint's response shape (single object, collection,
+    /// or primitive) — no response type argument needed, unlike a raw NSubstitute
+    /// <c>Received().SendAsync&lt;T&gt;(...)</c> assertion, which is pinned to one shape.
     /// This must be awaited. NSubstitute evaluates the assertion when the returned task is
     /// created, but leaving it unawaited produces a compiler warning and can mask failures.
     /// </remarks>
@@ -982,209 +1213,27 @@ public static class RequestBuilderMockExtensions
     ///
     /// await _service.GetFundAsync(fundId);
     ///
-    /// // Called at least once - type-safe, no URL strings!
-    /// await _client.Api.Funds[fundId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;();
+    /// // Called at least once - type-safe, no URL strings, no response type argument!
+    /// await _client.Api.Funds[fundId].VerifyGetAsync();
     ///
     /// // Exact counts
-    /// await _client.Api.Funds[fundId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Once);
-    /// await _client.Api.Funds[fundId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Exactly(3));
+    /// await _client.Api.Funds[fundId].VerifyGetAsync(Times.Once);
+    /// await _client.Api.Funds[fundId].VerifyGetAsync(Times.Exactly(3));
     ///
     /// // Assert an endpoint was never called
-    /// await _client.Api.Funds[otherId].VerifyGetAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Never);
+    /// await _client.Api.Funds[otherId].VerifyGetAsync(Times.Never);
     /// </code>
     /// </example>
-    public static Task VerifyGetAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.GET,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Verifies that a GET request returning a string was sent to this endpoint the
-    /// expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    /// <example>
-    /// <code>
-    /// await _client.Api.Status.VerifyGetAsync&lt;StatusRequestBuilder&gt;(Times.Once);
-    /// </code>
-    /// </example>
-    public static Task VerifyGetAsync<TBuilder>(
+    public static VerifyCallAssertion VerifyGetAsync<TBuilder>(
         this TBuilder requestBuilder,
         Times? times = null,
         Func<RequestInformation, bool>? requestInfoPredicate = null
     )
         where TBuilder : BaseRequestBuilder =>
-        VerifySendPrimitiveAsync(requestBuilder, Method.GET, times, requestInfoPredicate);
+        VerifyAnyResponseShapeAsync(requestBuilder, Method.GET, times, requestInfoPredicate);
 
     /// <summary>
-    /// Verifies that a GET request returning a collection was sent to this endpoint the
-    /// expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    /// <example>
-    /// <code>
-    /// await _client.Api.Funds[fundId].Activities
-    ///     .VerifyGetCollectionAsync&lt;ActivitiesRequestBuilder, Activity&gt;(Times.Once);
-    /// </code>
-    /// </example>
-    public static Task VerifyGetCollectionAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendCollectionAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.GET,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Verifies that a POST request returning a single object (IParsable) was sent to this
-    /// endpoint the expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    /// <example>
-    /// <code>
-    /// await _client.Api.Funds.VerifyPostAsync&lt;FundsRequestBuilder, Fund&gt;(Times.Once);
-    /// </code>
-    /// </example>
-    public static Task VerifyPostAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.POST,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Verifies that a POST request returning a collection was sent to this endpoint the
-    /// expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    public static Task VerifyPostCollectionAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendCollectionAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.POST,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Verifies that a PUT request returning a single object (IParsable) was sent to this
-    /// endpoint the expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    /// <example>
-    /// <code>
-    /// await _client.Api.Funds[fundId].VerifyPutAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Once);
-    /// </code>
-    /// </example>
-    public static Task VerifyPutAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.PUT,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Verifies that a PATCH request returning a single object (IParsable) was sent to this
-    /// endpoint the expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    /// <example>
-    /// <code>
-    /// await _client.Api.Funds[fundId].VerifyPatchAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Once);
-    /// </code>
-    /// </example>
-    public static Task VerifyPatchAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.PATCH,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Verifies that a DELETE request returning no content was sent to this endpoint the
-    /// expected number of times.
+    /// Verifies that a POST request was sent to this endpoint the expected number of times.
     /// </summary>
     /// <typeparam name="TBuilder">The request builder type.</typeparam>
     /// <param name="requestBuilder">The Kiota-generated request builder.</param>
@@ -1192,187 +1241,233 @@ public static class RequestBuilderMockExtensions
     /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
     /// </param>
     /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
+    /// <returns>
+    /// A pending <see cref="VerifyCallAssertion"/>. Await it directly for a count-only check,
+    /// or chain <see cref="VerifyCallAssertion.WithBody{TBody}"/> to also assert on the
+    /// deserialized request body.
+    /// </returns>
     /// <remarks>
-    /// For DELETE endpoints that return a body, use
-    /// <see cref="VerifyDeleteAsync{TBuilder, TResponse}"/> instead.
+    /// Matches the call regardless of the endpoint's response shape (single object, collection,
+    /// or no content) — a bare <c>[HttpPost]</c> action/status-transition endpoint and one
+    /// returning a created resource verify the same way.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// await _client.Api.Funds.VerifyPostAsync(Times.Once);
+    /// await _client.Api.Funds[fundId].Status.MarkSetupComplete.VerifyPostAsync(Times.Once);
+    /// </code>
+    /// </example>
+    public static VerifyCallAssertion VerifyPostAsync<TBuilder>(
+        this TBuilder requestBuilder,
+        Times? times = null,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder =>
+        VerifyAnyResponseShapeAsync(requestBuilder, Method.POST, times, requestInfoPredicate);
+
+    /// <summary>
+    /// Verifies that a PUT request was sent to this endpoint the expected number of times.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="times">
+    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
+    /// </param>
+    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
+    /// <returns>
+    /// A pending <see cref="VerifyCallAssertion"/>. Await it directly for a count-only check,
+    /// or chain <see cref="VerifyCallAssertion.WithBody{TBody}"/> to also assert on the
+    /// deserialized request body.
+    /// </returns>
+    /// <remarks>
+    /// Matches the call regardless of the endpoint's response shape (single object or no
+    /// content) — a fire-and-forget replication PUT between services and one returning the
+    /// updated resource verify the same way.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// await _client.Api.Funds[fundId].VerifyPutAsync(Times.Once);
+    ///
+    /// // count + body, in one assertion
+    /// await _client.ApiInternal.Funds[fundId]
+    ///     .VerifyPutAsync(Times.Once)
+    ///     .WithBody&lt;FundUpdateDto&gt;(body => body.RequiresMarket == true);
+    /// </code>
+    /// </example>
+    public static VerifyCallAssertion VerifyPutAsync<TBuilder>(
+        this TBuilder requestBuilder,
+        Times? times = null,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder =>
+        VerifyAnyResponseShapeAsync(requestBuilder, Method.PUT, times, requestInfoPredicate);
+
+    /// <summary>
+    /// Verifies that a PATCH request was sent to this endpoint the expected number of times.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="times">
+    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
+    /// </param>
+    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
+    /// <returns>
+    /// A pending <see cref="VerifyCallAssertion"/>. Await it directly for a count-only check,
+    /// or chain <see cref="VerifyCallAssertion.WithBody{TBody}"/> to also assert on the
+    /// deserialized request body.
+    /// </returns>
+    /// <remarks>
+    /// Matches the call regardless of the endpoint's response shape (single object or no
+    /// content) — the common partial-update case, a bare <c>[HttpPatch]</c> returning
+    /// <c>IActionResult</c>/<c>ActionResult</c> with no body, verifies the same way as one
+    /// returning the patched resource.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// await _client.Api.FundApplications["self"][id].VerifyPatchAsync(Times.Once);
+    /// </code>
+    /// </example>
+    public static VerifyCallAssertion VerifyPatchAsync<TBuilder>(
+        this TBuilder requestBuilder,
+        Times? times = null,
+        Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder =>
+        VerifyAnyResponseShapeAsync(requestBuilder, Method.PATCH, times, requestInfoPredicate);
+
+    /// <summary>
+    /// Verifies that a DELETE request was sent to this endpoint the expected number of times.
+    /// </summary>
+    /// <typeparam name="TBuilder">The request builder type.</typeparam>
+    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
+    /// <param name="times">
+    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
+    /// </param>
+    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
+    /// <returns>
+    /// A pending <see cref="VerifyCallAssertion"/>. Await it directly for a count-only check.
+    /// </returns>
+    /// <remarks>
+    /// Matches the call regardless of the endpoint's response shape (no content, single object,
+    /// or collection) — no response type argument needed.
     /// </remarks>
     /// <example>
     /// <code>
     /// await _client.Api.Funds[fundId].VerifyDeleteAsync(Times.Once);
     /// </code>
     /// </example>
-    public static async Task VerifyDeleteAsync<TBuilder>(
+    public static VerifyCallAssertion VerifyDeleteAsync<TBuilder>(
         this TBuilder requestBuilder,
         Times? times = null,
         Func<RequestInformation, bool>? requestInfoPredicate = null
+    )
+        where TBuilder : BaseRequestBuilder =>
+        VerifyAnyResponseShapeAsync(requestBuilder, Method.DELETE, times, requestInfoPredicate);
+
+    /// <summary>
+    /// Builds the pending assertion behind every collapsed <c>Verify*Async&lt;TBuilder&gt;(Times)</c>
+    /// method. The count check (run by <see cref="VerifyAnyResponseShapeCoreAsync"/> when the
+    /// returned <see cref="VerifyCallAssertion"/> is awaited) matches calls across every
+    /// <see cref="IRequestAdapter"/> response shape (<c>SendAsync</c>, <c>SendCollectionAsync</c>,
+    /// <c>SendPrimitiveAsync</c>, <c>SendPrimitiveCollectionAsync</c>, <c>SendNoContentAsync</c>)
+    /// instead of asserting against one specific overload — so verification never needs to know,
+    /// or be told via a type argument, what shape the endpoint's response actually is.
+    /// </summary>
+    private static VerifyCallAssertion VerifyAnyResponseShapeAsync<TBuilder>(
+        TBuilder requestBuilder,
+        Method expectedMethod,
+        Times? times,
+        Func<RequestInformation, bool>? requestInfoPredicate
     )
         where TBuilder : BaseRequestBuilder
     {
-        var (received, urlTemplate, pathParameters) = PrepareVerification(requestBuilder, times);
-
-        await received.SendNoContentAsync(
-            Arg.Is<RequestInformation>(req =>
-                MatchesBuilder(req, urlTemplate, pathParameters, Method.DELETE)
-                && (requestInfoPredicate == null || requestInfoPredicate(req))
-            ),
-            Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
-            Arg.Any<CancellationToken>()
-        );
-    }
-
-    /// <summary>
-    /// Verifies that a DELETE request returning a single object (IParsable) was sent to this
-    /// endpoint the expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    /// <example>
-    /// <code>
-    /// await _client.Api.Funds[fundId].VerifyDeleteAsync&lt;FundItemRequestBuilder, Fund&gt;(Times.Once);
-    /// </code>
-    /// </example>
-    public static Task VerifyDeleteAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.DELETE,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Verifies that a DELETE request returning a collection was sent to this endpoint the
-    /// expected number of times.
-    /// </summary>
-    /// <typeparam name="TBuilder">The request builder type.</typeparam>
-    /// <typeparam name="TResponse">The response item type (must implement IParsable).</typeparam>
-    /// <param name="requestBuilder">The Kiota-generated request builder.</param>
-    /// <param name="times">
-    /// The expected number of calls. Defaults to <see cref="Times.AtLeastOnce"/>.
-    /// </param>
-    /// <param name="requestInfoPredicate">Optional additional conditions the request must match.</param>
-    /// <returns>A task that completes once the assertion has been evaluated.</returns>
-    public static Task VerifyDeleteCollectionAsync<TBuilder, TResponse>(
-        this TBuilder requestBuilder,
-        Times? times = null,
-        Func<RequestInformation, bool>? requestInfoPredicate = null
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable =>
-        VerifySendCollectionAsync<TBuilder, TResponse>(
-            requestBuilder,
-            Method.DELETE,
-            times,
-            requestInfoPredicate
-        );
-
-    /// <summary>
-    /// Resolves the mock adapter, applies the expected call count, and returns the
-    /// matching information shared by every verification.
-    /// </summary>
-    private static (
-        IRequestAdapter Received,
-        string UrlTemplate,
-        Dictionary<string, object> PathParameters
-    ) PrepareVerification<TBuilder>(TBuilder requestBuilder, Times? times)
-        where TBuilder : BaseRequestBuilder
-    {
-        times ??= Times.AtLeastOnce;
-
         var mockAdapter = GetMockAdapter(requestBuilder);
         var (urlTemplate, pathParameters) = GetBuilderInfo(requestBuilder);
 
-        var received = times.Count is int exactCount
-            ? mockAdapter.Received(exactCount)
-            : mockAdapter.Received();
-
-        return (received, urlTemplate, pathParameters);
-    }
-
-    /// <summary>
-    /// Verifies a request dispatched through <c>SendAsync</c> for the given HTTP method.
-    /// </summary>
-    private static async Task VerifySendAsync<TBuilder, TResponse>(
-        TBuilder requestBuilder,
-        Method expectedMethod,
-        Times? times,
-        Func<RequestInformation, bool>? requestInfoPredicate
-    )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable
-    {
-        var (received, urlTemplate, pathParameters) = PrepareVerification(requestBuilder, times);
-
-        await received.SendAsync<TResponse>(
-            Arg.Is<RequestInformation>(req =>
-                MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
-                && (requestInfoPredicate == null || requestInfoPredicate(req))
-            ),
-            Arg.Any<ParsableFactory<TResponse>>(),
-            Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
-            Arg.Any<CancellationToken>()
+        return new VerifyCallAssertion(
+            mockAdapter,
+            urlTemplate,
+            pathParameters,
+            expectedMethod,
+            times ?? Times.AtLeastOnce,
+            requestInfoPredicate
         );
     }
 
     /// <summary>
-    /// Verifies a request dispatched through <c>SendCollectionAsync</c> for the given HTTP method.
+    /// Shared implementation behind <see cref="VerifyAnyResponseShapeAsync{TBuilder}"/> and
+    /// <see cref="VerifyCallAssertion"/>'s count check.
     /// </summary>
-    private static async Task VerifySendCollectionAsync<TBuilder, TResponse>(
-        TBuilder requestBuilder,
+    internal static Task VerifyAnyResponseShapeCoreAsync(
+        IRequestAdapter mockAdapter,
+        string urlTemplate,
+        Dictionary<string, object> pathParameters,
         Method expectedMethod,
-        Times? times,
+        Times times,
         Func<RequestInformation, bool>? requestInfoPredicate
     )
-        where TBuilder : BaseRequestBuilder
-        where TResponse : IParsable
     {
-        var (received, urlTemplate, pathParameters) = PrepareVerification(requestBuilder, times);
+        var allRequests = mockAdapter
+            .ReceivedCalls()
+            .Select(call => call.GetArguments().OfType<RequestInformation>().FirstOrDefault())
+            .OfType<RequestInformation>()
+            .ToList();
 
-        await received.SendCollectionAsync<TResponse>(
-            Arg.Is<RequestInformation>(req =>
-                MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
-                && (requestInfoPredicate == null || requestInfoPredicate(req))
-            ),
-            Arg.Any<ParsableFactory<TResponse>>(),
-            Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
-            Arg.Any<CancellationToken>()
+        var matchCount = allRequests.Count(req =>
+            MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
+            && (requestInfoPredicate == null || requestInfoPredicate(req))
         );
+
+        var satisfied = times.Count is int exactCount ? matchCount == exactCount : matchCount >= 1;
+
+        if (!satisfied)
+        {
+            // Same method + URL template, but excluded by path parameters or the predicate:
+            // surfacing these turns "0 matching calls" into "did you mean this ID?" instead of
+            // leaving it ambiguous whether the endpoint was never called at all.
+            var sameEndpointOtherRequests = allRequests
+                .Where(req =>
+                    req.HttpMethod == expectedMethod
+                    && string.Equals(
+                        req.UrlTemplate,
+                        urlTemplate,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                    && !MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
+                )
+                .Select(DescribePathParameters)
+                .Distinct()
+                .ToList();
+
+            var expectedParams = DescribePathParameters(pathParameters);
+            var detail =
+                sameEndpointOtherRequests.Count == 0
+                    ? "No calls were made to this endpoint at all."
+                    : $"Calls were made to this endpoint with different path parameters: "
+                        + string.Join(", ", sameEndpointOtherRequests.Select(p => $"[{p}]"));
+
+            throw new ReceivedCallsException(
+                $"Expected a {expectedMethod} request to {urlTemplate} with path parameters "
+                    + $"[{expectedParams}] {times}, but received {matchCount} matching call(s). "
+                    + detail
+            );
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Verifies a request dispatched through <c>SendPrimitiveAsync</c> for the given HTTP method.
+    /// Renders path parameters as <c>key=value</c> pairs for diagnostic messages, excluding the
+    /// synthetic <c>baseurl</c> entry that every <see cref="RequestInformation"/> carries.
     /// </summary>
-    private static async Task VerifySendPrimitiveAsync<TBuilder>(
-        TBuilder requestBuilder,
-        Method expectedMethod,
-        Times? times,
-        Func<RequestInformation, bool>? requestInfoPredicate
-    )
-        where TBuilder : BaseRequestBuilder
-    {
-        var (received, urlTemplate, pathParameters) = PrepareVerification(requestBuilder, times);
+    private static string DescribePathParameters(RequestInformation req) =>
+        DescribePathParameters(req.PathParameters);
 
-        await received.SendPrimitiveAsync<string>(
-            Arg.Is<RequestInformation>(req =>
-                MatchesBuilder(req, urlTemplate, pathParameters, expectedMethod)
-                && (requestInfoPredicate == null || requestInfoPredicate(req))
-            ),
-            Arg.Any<Dictionary<string, ParsableFactory<IParsable>>>(),
-            Arg.Any<CancellationToken>()
+    private static string DescribePathParameters(IDictionary<string, object> pathParameters) =>
+        string.Join(
+            ", ",
+            pathParameters.Where(p => p.Key != "baseurl").Select(p => $"{p.Key}={p.Value}")
         );
-    }
 
     /// <summary>
     /// Gets the mock IRequestAdapter from a request builder using reflection.

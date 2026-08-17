@@ -28,6 +28,6 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.0.0" />
     <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="2.0.0" />
-    <PackageReference Include="NSubstitute" Version="6.1.0" />
+    <PackageReference Include="NSubstitute" Version="6.2.0" />
   </ItemGroup>
 </Project>

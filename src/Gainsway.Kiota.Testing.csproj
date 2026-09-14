@@ -26,8 +26,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.1.1" />
-    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="2.1.1" />
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.1.2" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="2.1.2" />
     <PackageReference Include="NSubstitute" Version="6.2.0" />
   </ItemGroup>
 </Project>

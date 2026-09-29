@@ -81,7 +81,7 @@ public class RequestBuilderMockExtensionsTests
         // Act - deliberately no call
 
         // Assert - "at least once" must fail when there were no calls
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyGetAsync()
         );
     }
@@ -110,7 +110,7 @@ public class RequestBuilderMockExtensionsTests
         await _mockClient.Api.Items[itemId].GetAsync();
 
         // Assert
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyGetAsync(Times.Never)
         );
     }
@@ -157,7 +157,7 @@ public class RequestBuilderMockExtensionsTests
         await _mockClient.Api.Items[itemId].GetAsync();
 
         // Assert - expecting two calls must fail, proving the assertion is real
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyGetAsync(Times.Exactly(2))
         );
     }
@@ -199,7 +199,7 @@ public class RequestBuilderMockExtensionsTests
 
         // Assert - "0 matching calls" alone can't distinguish "never called" from "called with
         // a different ID"; the message must surface the ID that was actually used.
-        var ex = Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[typoedId].VerifyGetAsync(Times.Once)
         );
 
@@ -219,7 +219,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result, Is.EqualTo("operational"));
 
         await _mockClient.Api.Status.VerifyGetAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Status.VerifyGetAsync(Times.Never)
         );
     }
@@ -239,7 +239,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result, Has.Count.EqualTo(1));
 
         await _mockClient.Api.Items.VerifyGetAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items.VerifyGetAsync(Times.Never)
         );
     }
@@ -257,7 +257,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result!.Value, Is.EqualTo("created"));
 
         await _mockClient.Api.Items.VerifyPostAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items.VerifyPostAsync(Times.Never)
         );
     }
@@ -277,7 +277,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result, Has.Count.EqualTo(1));
 
         await _mockClient.Api.Items.VerifyPostAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items.VerifyPostAsync(Times.Never)
         );
     }
@@ -296,7 +296,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result!.Value, Is.EqualTo("updated"));
 
         await _mockClient.Api.Items[itemId].VerifyPutAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyPutAsync(Times.Never)
         );
     }
@@ -333,7 +333,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result!.Value, Is.EqualTo("patched"));
 
         await _mockClient.Api.Items[itemId].VerifyPatchAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyPatchAsync(Times.Never)
         );
     }
@@ -350,7 +350,7 @@ public class RequestBuilderMockExtensionsTests
 
         // Assert
         await _mockClient.Api.Items[itemId].VerifyPutAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyPutAsync(Times.Never)
         );
     }
@@ -367,7 +367,7 @@ public class RequestBuilderMockExtensionsTests
 
         // Assert
         await _mockClient.Api.Items[itemId].VerifyPatchAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyPatchAsync(Times.Never)
         );
     }
@@ -383,7 +383,7 @@ public class RequestBuilderMockExtensionsTests
 
         // Assert
         await _mockClient.Api.Items.VerifyPostAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items.VerifyPostAsync(Times.Never)
         );
     }
@@ -414,7 +414,7 @@ public class RequestBuilderMockExtensionsTests
         await _mockClient.Api.Items[itemId].PutNoContentAsync(new TestRequest { Flag = false });
 
         // Act - one call happened (satisfying Times.Once), but its body doesn't match
-        var ex = Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient
                 .Api.Items[itemId]
                 .VerifyPutAsync(Times.Once)
@@ -427,7 +427,7 @@ public class RequestBuilderMockExtensionsTests
     }
 
     [Test]
-    public void VerifyPutAsync_WithBody_ShouldThrow_WhenCountDoesNotMatch()
+    public async Task VerifyPutAsync_WithBody_ShouldThrow_WhenCountDoesNotMatch()
     {
         // Arrange - count check must run and fail before the body is ever inspected
         var itemId = "123";
@@ -436,7 +436,7 @@ public class RequestBuilderMockExtensionsTests
         // Act - deliberately no call
 
         // Assert
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient
                 .Api.Items[itemId]
                 .VerifyPutAsync(Times.Once)
@@ -471,7 +471,7 @@ public class RequestBuilderMockExtensionsTests
         await _mockClient.Api.Items[itemId].PutNoContentAsync(new TestRequest { Flag = true });
 
         await _mockClient.Api.Items[itemId].VerifyPutAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyPutAsync(Times.Never)
         );
     }
@@ -488,7 +488,7 @@ public class RequestBuilderMockExtensionsTests
 
         // Assert
         await _mockClient.Api.Items[itemId].VerifyDeleteAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyDeleteAsync(Times.Never)
         );
     }
@@ -507,7 +507,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result!.Value, Is.EqualTo("deleted"));
 
         await _mockClient.Api.Items[itemId].VerifyDeleteAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items[itemId].VerifyDeleteAsync(Times.Never)
         );
     }
@@ -527,7 +527,7 @@ public class RequestBuilderMockExtensionsTests
         Assert.That(result, Has.Count.EqualTo(1));
 
         await _mockClient.Api.Items.VerifyDeleteAsync(Times.Once);
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient.Api.Items.VerifyDeleteAsync(Times.Never)
         );
     }
@@ -563,7 +563,7 @@ public class RequestBuilderMockExtensionsTests
             .Api.Items[itemId]
             .VerifyGetAsync(Times.Once, req => req.PathParameters.ContainsKey("id"));
 
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _mockClient
                 .Api.Items[itemId]
                 .VerifyGetAsync(Times.Once, req => req.PathParameters.ContainsKey("nonexistent"))

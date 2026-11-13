@@ -75,8 +75,7 @@ public readonly struct VerifyCallAssertion
     private Task VerifyCountAsync()
     {
         var count = _handler.Matching(_method, _path, _predicate).Count;
-        if (_times.Count is { } expected && count != expected
-            || _times.Count is null && count < 1)
+        if (_times.Count is { } expected && count != expected || _times.Count is null && count < 1)
         {
             throw new ReceivedCallsException(
                 $"Expected {_method} {_path} {_times}, but observed {count} call(s)."

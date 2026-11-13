@@ -84,8 +84,8 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
         CancellationToken cancellationToken
     )
     {
-        var requestUri = request.RequestUri
-            ?? throw new InvalidOperationException("Request has no URI.");
+        var requestUri =
+            request.RequestUri ?? throw new InvalidOperationException("Request has no URI.");
         var headers = request.Headers.ToDictionary(x => x.Key, x => x.Value.ToArray());
         if (request.Content is not null)
         {

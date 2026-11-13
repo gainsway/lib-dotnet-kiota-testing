@@ -20,7 +20,8 @@ public static class NswagClientMockExtensions
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri(baseUrl) };
         try
         {
-            var client = Activator.CreateInstance(typeof(T), httpClient) as T
+            var client =
+                Activator.CreateInstance(typeof(T), httpClient) as T
                 ?? throw new InvalidOperationException(
                     $"{typeof(T).FullName} must expose a public HttpClient constructor."
                 );

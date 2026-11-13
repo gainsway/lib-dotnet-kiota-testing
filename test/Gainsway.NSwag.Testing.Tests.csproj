@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Gainsway.Kiota.Testing.Tests</RootNamespace>
+    <RootNamespace>Gainsway.NSwag.Testing.Tests</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -28,6 +28,6 @@
     <Using Include="NUnit.Framework" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\src\Gainsway.Kiota.Testing.csproj" />
+    <ProjectReference Include="..\src\Gainsway.NSwag.Testing.csproj" />
   </ItemGroup>
 </Project>

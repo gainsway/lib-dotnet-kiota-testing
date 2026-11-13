@@ -1,5 +1,5 @@
-site_name: "lib-dotnet-kiota-testing"
-site_description: "This library adds helpers and extensions to simplify Kiota generated Clients mocking "
+site_name: "NSwag generated client testing"
+site_description: "HTTP-level mocking and verification for generated NSwag clients"
 
 nav:
   - Introduction: index.md

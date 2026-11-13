@@ -1,11 +1,6 @@
-## lib-dotnet-kiota-testing
+# NSwag client testing
 
-This library adds helpers and extensions to simplify Kiota generated Clients mocking 
+Provides in-memory HTTP mocking and verification for NSwag-generated
+`HttpClient` C# clients.
 
-## Configuration
-
-...
-
-## Environment variables
-
-...
+See [README](../README.md) and [Migration guide](../MIGRATION.md).

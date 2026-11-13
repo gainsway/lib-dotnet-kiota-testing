@@ -57,6 +57,12 @@ public static class NswagClientMockExtensions
     )
         where T : class
     {
+        if (response is Exception exception)
+        {
+            GetHandler(client).AddException(method, path, exception, predicate);
+            return client;
+        }
+
         GetHandler(client).AddResponse(method, path, response, HttpStatusCode.OK, predicate);
         return client;
     }

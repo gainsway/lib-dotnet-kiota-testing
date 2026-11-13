@@ -8,8 +8,7 @@ namespace Gainsway.NSwag.Testing;
 /// </summary>
 public static class NswagClientMockExtensions
 {
-    private static readonly ConditionalWeakTable<object, MockHttpMessageHandler> Handlers =
-        new();
+    private static readonly ConditionalWeakTable<object, MockHttpMessageHandler> Handlers = new();
 
     /// <summary>
     /// Creates an actual generated client with an in-memory HTTP transport.

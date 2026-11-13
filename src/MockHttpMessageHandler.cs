@@ -32,10 +32,16 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
     )
     {
         var json = JsonConvert.SerializeObject(response, SerializerSettings);
-        Add(method, path, predicate, () => new HttpResponseMessage(statusCode)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json"),
-        });
+        Add(
+            method,
+            path,
+            predicate,
+            () =>
+                new HttpResponseMessage(statusCode)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json"),
+                }
+        );
     }
 
     public void AddNoContent(

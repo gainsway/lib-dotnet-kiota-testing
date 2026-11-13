@@ -55,7 +55,7 @@ public class NswagClientMockExtensionsTests
         _client.MockPostAsync("/api/items");
         await _client.CreateItemAsync(new Item { Id = 7 });
 
-        Assert.ThrowsAsync<ReceivedCallsException>(async () =>
+        await Assert.ThrowsAsync<ReceivedCallsException>(async () =>
             await _client.VerifyPostAsync("/api/items").WithBody<Item>(item => item.Id == 8)
         );
     }
@@ -77,22 +77,22 @@ public class NswagClientMockExtensionsTests
     {
         _client.MockGetError("/api/items/99", HttpStatusCode.NotFound);
 
-        var error = Assert.ThrowsAsync<HttpRequestException>(() => _client.GetItemAsync(99));
+        var error = await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetItemAsync(99));
         Assert.That(error!.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         await _client.VerifyGetAsync("/api/items/99", Times.Once);
     }
 
     [Test]
-    public void UnmatchedRequest_ReturnsNotFoundRatherThanCallingNetwork()
+    public async Task UnmatchedRequest_ReturnsNotFoundRatherThanCallingNetwork()
     {
-        Assert.ThrowsAsync<HttpRequestException>(() => _client.GetItemAsync(999));
+        await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetItemAsync(999));
     }
 
     [Test]
-    public void MockException_RaisesTransportFailure()
+    public async Task MockException_RaisesTransportFailure()
     {
         _client.MockGetAsync("/api/items/1", new HttpRequestException("offline"));
-        var error = Assert.ThrowsAsync<HttpRequestException>(() => _client.GetItemAsync(1));
+        var error = await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetItemAsync(1));
         Assert.That(error!.Message, Is.EqualTo("offline"));
     }
 

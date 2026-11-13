@@ -7,26 +7,41 @@ namespace Gainsway.NSwag.Testing;
 /// <summary>
 /// An awaitable request-count assertion; can also verify the JSON request body.
 /// </summary>
-public readonly struct VerifyCallAssertion(
-    MockHttpMessageHandler handler,
-    HttpMethod method,
-    string path,
-    Times times,
-    Func<RecordedRequest, bool>? predicate
-)
+public readonly struct VerifyCallAssertion
 {
+    private readonly MockHttpMessageHandler _handler;
+    private readonly HttpMethod _method;
+    private readonly string _path;
+    private readonly Times _times;
+    private readonly Func<RecordedRequest, bool>? _predicate;
+
+    internal VerifyCallAssertion(
+        MockHttpMessageHandler handler,
+        HttpMethod method,
+        string path,
+        Times times,
+        Func<RecordedRequest, bool>? predicate
+    )
+    {
+        _handler = handler;
+        _method = method;
+        _path = path;
+        _times = times;
+        _predicate = predicate;
+    }
+
     public TaskAwaiter GetAwaiter() => VerifyCountAsync().GetAwaiter();
 
     public async Task WithBody<TBody>(Func<TBody, bool> bodyPredicate)
     {
         ArgumentNullException.ThrowIfNull(bodyPredicate);
         await VerifyCountAsync();
-        if (times.Count is 0)
+        if (_times.Count is 0)
         {
             return;
         }
 
-        foreach (var request in handler.Matching(method, path, predicate))
+        foreach (var request in _handler.Matching(_method, _path, _predicate))
         {
             if (string.IsNullOrWhiteSpace(request.Body))
             {
@@ -53,18 +68,18 @@ public readonly struct VerifyCallAssertion(
         }
 
         throw new ReceivedCallsException(
-            $"No matching {method} {path} request had a body satisfying the assertion."
+            $"No matching {_method} {_path} request had a body satisfying the assertion."
         );
     }
 
     private Task VerifyCountAsync()
     {
-        var count = handler.Matching(method, path, predicate).Count;
-        if (times.Count is { } expected && count != expected
-            || times.Count is null && count < 1)
+        var count = _handler.Matching(_method, _path, _predicate).Count;
+        if (_times.Count is { } expected && count != expected
+            || _times.Count is null && count < 1)
         {
             throw new ReceivedCallsException(
-                $"Expected {method} {path} {times}, but observed {count} call(s)."
+                $"Expected {_method} {_path} {_times}, but observed {count} call(s)."
             );
         }
 

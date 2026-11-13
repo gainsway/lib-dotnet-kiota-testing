@@ -180,11 +180,7 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
         for (var index = 0; index < expectedSegments.Length; index++)
         {
             var expected = expectedSegments[index];
-            if (
-                expected.Length > 2
-                && expected.StartsWith('{')
-                && expected.EndsWith('}')
-            )
+            if (expected.Length > 2 && expected.StartsWith('{') && expected.EndsWith('}'))
             {
                 continue;
             }

@@ -22,12 +22,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="CSharpier.MSBuild" Version="1.4.0">
+    <PackageReference Include="CSharpier.MSBuild" Version="1.4.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.1.6" />
-    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="2.1.6" />
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="2.2.0" />
     <PackageReference Include="NSubstitute" Version="6.2.0" />
   </ItemGroup>
 </Project>
